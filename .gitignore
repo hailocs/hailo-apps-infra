@@ -24,3 +24,10 @@ dist/
 *.egg-info/
 .cache/
 coverage/
+
+.venv/
+infra-venv/
+hailo_infra_venv/
+.env
+
+.pytest_cache/
