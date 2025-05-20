@@ -1,87 +1,56 @@
 from setuptools import setup, find_packages
-import os
+from setuptools.command.install import install
+import runpy
 import sys
-import logging
-import subprocess
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-def check_hailo_package():
-    """Verify if Hailo package is installed."""
-    try:
-        import hailo
-    except ImportError:
-        logger.error("Hailo python package not found. Please make sure you're in the Hailo virtual environment. Run 'source setup_env.sh' and try again.")
-        sys.exit(1)
+class CustomInstallCommand(install):
+    def run(self):
+        # Run the regular installation
+        install.run(self)
 
-def read_requirements():
-    """Read and parse requirements.txt, converting Git-based dependencies."""
-    with open("requirements.txt", "r") as f:
-        lines = f.read().splitlines()
+        # Run your post_install logic here
+        print("🚀 Running post-install hook...")
+        try:
+            runpy.run_module("hailo_apps_infra.installation.hailo_installation.post_install", run_name="__main__")
+            print("✅ Post-install completed.")
+        except Exception as e:
+            print(f"❌ Post-install failed: {e}")
+            sys.exit(1)
 
-    parsed_lines = []
-    for line in lines:
-        if line.startswith("git+https://"):
-            # Extract the package name for PEP 508 syntax
-            package_name = line.split("/")[-1].split(".")[0]
-            parsed_lines.append(f"{package_name} @ {line}")
-        else:
-            parsed_lines.append(line)
-    return parsed_lines
 
-def run_shell_command(command, error_message):
-    """Run shell commands and handle errors."""
-    logger.info(f"Running command: {command}")
-    result = subprocess.run(command, shell=True)
-    if result.returncode != 0:
-        logger.error(f"{error_message}. Exit code: {result.returncode}")
-        sys.exit(result.returncode)
-
-def get_downloaded_files():
-    """Get a list of downloaded files from the resources directory."""
-    resource_dir = os.path.join(os.path.dirname(__file__), 'resources')
-    downloaded_files = []
-    for root, _, files in os.walk(resource_dir):
-        for file in files:
-            relative_path = os.path.relpath(os.path.join(root, file), 'resources')
-            downloaded_files.append(relative_path)
-    return downloaded_files
-
-def main():
-    check_hailo_package()
-
-    logger.info("Reading requirements...")
-    requirements = read_requirements()
-
-    logger.info("Compiling C++ code...")
-    run_shell_command("./compile_postprocess.sh", "Failed to compile C++ code")
-
-    logger.info("Downloading resources...")
-    run_shell_command("./download_resources.sh --all", "Failed to download resources")
-
-    setup(
-        name='hailo_apps_infra',
-        version='0.2.0',
-        description='A collection of infrastructure utilities for Hailo applications',
-        long_description=open('README.md').read(),
-        long_description_content_type='text/markdown',
-        author='Hailo',
-        author_email='support@hailo.ai',
-        url='https://github.com/hailo-ai/hailo-apps-infra',
-        install_requires=requirements,
-        packages=find_packages(exclude=["tests", "docs"]),
-        package_data={
-            'hailo_apps_infra': ['*.json', '*.sh', '*.cpp', '*.hpp', '*.pc'] + get_downloaded_files(),
-        },
-        include_package_data=True,
-        entry_points={
-            'console_scripts': [
-                'get-usb-camera=hailo_apps_infra.get_usb_camera:main'
-            ],
-        },
-    )
-
-if __name__ == '__main__':
-    main()
+setup(
+    name="hailo-apps-infra",
+    version="0.4.0",
+    description="Infra package to install all modular Hailo apps",
+    author="Hailo",
+    packages=find_packages(
+        include=["hailo_apps_infra*"]
+    ),
+    include_package_data=True,
+    install_requires=[
+        "numpy<2.0.0",
+        "setproctitle",
+        "opencv-python",
+        "python-dotenv",
+        "pyyaml",
+    ],
+    python_requires=">=3.7",
+    cmdclass={
+        "install": CustomInstallCommand,
+    },
+    entry_points={
+        "console_scripts": {
+            "hailo-infra-install = install:main",
+            "hailo-detect = hailo_apps_infra.pipelines.hailo_pipelines.detection_pipeline:main",
+            "hailo-depth = hailo_apps_infra.pipelines.hailo_pipelines.depth_pipeline:main",
+            "hailo-pose = hailo_apps_infra.pipelines.hailo_pipelines.pose_estimation_pipeline:main",
+            "hailo-seg = hailo_apps_infra.pipelines.hailo_pipelines.instance_segmentation_pipeline:main",
+            "hailo-simple-detect = hailo_apps_infra.pipelines.hailo_pipelines.detection_pipeline_simple:main",
+        }
+    },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Operating System :: OS Independent",
+    ],
+)

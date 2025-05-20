@@ -1,12 +1,30 @@
 import gi
 gi.require_version('Gst', '1.0')
-import os
 import setproctitle
-from hailo_apps_infra.gstreamer_app import app_callback_class, dummy_callback, GStreamerApp
-from hailo_apps_infra.gstreamer_helper_pipelines import DISPLAY_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, SOURCE_PIPELINE, USER_CALLBACK_PIPELINE
-from hailo_apps_infra.hailo_rpi_common import detect_hailo_arch, get_default_parser
 
-# User Gstreamer Application: This class inherits from the hailo_rpi_common.GStreamerApp class
+from hailo_apps_infra.gstreamer.hailo_gstreamer.gstreamer_app import (
+    app_callback_class,
+    dummy_callback,
+    GStreamerApp,
+)
+from hailo_apps_infra.gstreamer.hailo_gstreamer.gstreamer_helper_pipelines import (
+    DISPLAY_PIPELINE,
+    INFERENCE_PIPELINE,
+    INFERENCE_PIPELINE_WRAPPER,
+    SOURCE_PIPELINE,
+    USER_CALLBACK_PIPELINE,
+)
+from hailo_apps_infra.common.hailo_common.core import get_default_parser, get_resource_path
+from hailo_apps_infra.common.hailo_common.installation_utils import detect_hailo_arch
+from hailo_apps_infra.common.hailo_common.defines import (
+    DEPTH_POSTPROCESS_FUNCTION,
+    RESOURCES_SO_DIR_NAME,
+    DEPTH_POSTPROCESS_SO_FILENAME,
+    RESOURCES_MODELS_DIR_NAME,
+    DEPTH_PIPELINE,
+    DEPTH_APP_TITLE,
+)
+# User Gstreamer Application: This class inherits from the common.GStreamerApp class
 class GStreamerDepthApp(GStreamerApp):
     def __init__(self, app_callback, user_data, parser=None):
         
@@ -25,16 +43,11 @@ class GStreamerDepthApp(GStreamerApp):
             self.arch = self.options_menu.arch
 
         self.app_callback = app_callback
-        setproctitle.setproctitle("Hailo Depth App")  # Set the process title
+        setproctitle.setproctitle(DEPTH_APP_TITLE)  # Set the process title
 
-        # Set the HEF file path (based on the arch), depth post processing method name & post-processing shared object file path
-        if self.arch == "hailo8":
-            self.depth_hef_path = os.path.join(self.current_path, '../resources/scdepthv3.hef')
-        else:  # hailo8l
-            self.depth_hef_path = os.path.join(self.current_path, '../resources/scdepthv3_h8l.hef')
-        self.depth_post_function_name = "filter_scdepth"
-        self.depth_post_process_so = os.path.join(self.current_path, '../resources/libdepth_postprocess.so')  # defined in hailo-apps-infra/cpp/meson.build
-
+        self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME)
+        self.post_process_so = get_resource_path(DEPTH_PIPELINE, RESOURCES_SO_DIR_NAME, DEPTH_POSTPROCESS_SO_FILENAME)
+        self.post_function_name = DEPTH_POSTPROCESS_FUNCTION
         self.create_pipeline()
 
     def get_pipeline_string(self):
@@ -42,9 +55,9 @@ class GStreamerDepthApp(GStreamerApp):
                                           video_width=self.video_width, video_height=self.video_height,
                                           frame_rate=self.frame_rate, sync=self.sync)
         depth_pipeline = INFERENCE_PIPELINE(
-            hef_path=self.depth_hef_path,
-            post_process_so=self.depth_post_process_so,
-            post_function_name=self.depth_post_function_name,
+            hef_path=self.hef_path,
+            post_process_so=self.post_process_so,
+            post_function_name=self.post_function_name,
             name='depth_inference')
         depth_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(depth_pipeline, name='inference_wrapper_depth')
         user_callback_pipeline = USER_CALLBACK_PIPELINE()
@@ -57,9 +70,13 @@ class GStreamerDepthApp(GStreamerApp):
             f'{display_pipeline}'
         )
 
-if __name__ == "__main__":
+def main():
     # Create an instance of the user app callback class
     user_data = app_callback_class()
     app_callback = dummy_callback
     app = GStreamerDepthApp(app_callback, user_data)
     app.run()
+    
+if __name__ == "__main__":
+    print("Starting Hailo Depth App...")
+    main()
