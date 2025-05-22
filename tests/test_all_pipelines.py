@@ -1,16 +1,16 @@
 import os
 import pytest
 import logging
-from hailo_apps_infra.common.hailo_common.test_utils import (
+from hailo_apps_infra.hailo_core.hailo_common.test_utils import (
     run_pipeline_module_with_args,
     run_pipeline_pythonpath_with_args,
     run_pipeline_cli_with_args,
     get_pipeline_args,
 )
-from hailo_apps_infra.common.hailo_common.installation_utils import (
+from hailo_apps_infra.hailo_core.hailo_common.installation_utils import (
     detect_host_arch,
 )
-from hailo_apps_infra.common.hailo_common.camera_utils import (
+from hailo_apps_infra.hailo_core.hailo_common.camera_utils import (
     is_rpi_camera_available,
 )
 
@@ -22,32 +22,32 @@ logger = logging.getLogger("test_run_everything")
 pipelines = [
     {
         "name": "detection",
-        "module": "hailo_apps_infra.pipelines.hailo_pipelines.detection_pipeline",
-        "script": "hailo_apps_infra/pipelines/hailo_pipelines/detection_pipeline.py",
+        "module": "hailo_apps_infra.hailo_apps.hailo_pipelines.detection_pipeline",
+        "script": "hailo_apps_infra/hailo_apps/hailo_pipelines/detection_pipeline.py",
         "cli": "hailo-detect"
     },
     {
         "name": "pose_estimation",
-        "module": "hailo_apps_infra.pipelines.hailo_pipelines.pose_estimation_pipeline",
-        "script": "hailo_apps_infra/pipelines/hailo_pipelines/pose_estimation_pipeline.py",
+        "module": "hailo_apps_infra.hailo_apps.hailo_pipelines.pose_estimation_pipeline",
+        "script": "hailo_apps_infra/hailo_apps/hailo_pipelines/pose_estimation_pipeline.py",
         "cli": "hailo-pose"
     },
     {
         "name": "depth",
-        "module": "hailo_apps_infra.pipelines.hailo_pipelines.depth_pipeline",
-        "script": "hailo_apps_infra/pipelines/hailo_pipelines/depth_pipeline.py",
+        "module": "hailo_apps_infra.hailo_apps.hailo_pipelines.depth_pipeline",
+        "script": "hailo_apps_infra/hailo_apps/hailo_pipelines/depth_pipeline.py",
         "cli": "hailo-depth"
     },
     {
         "name": "instance_segmentation",
-        "module": "hailo_apps_infra.pipelines.hailo_pipelines.instance_segmentation_pipeline",
-        "script": "hailo_apps_infra/pipelines/hailo_pipelines/instance_segmentation_pipeline.py",
+        "module": "hailo_apps_infra.hailo_apps.hailo_pipelines.instance_segmentation_pipeline",
+        "script": "hailo_apps_infra/hailo_apps/hailo_pipelines/instance_segmentation_pipeline.py",
         "cli": "hailo-seg"
     },
     {
         "name": "simple_detection",
-        "module": "hailo_apps_infra.pipelines.hailo_pipelines.detection_pipeline_simple",
-        "script": "hailo_apps_infra/pipelines/hailo_pipelines/detection_pipeline_simple.py",
+        "module": "hailo_apps_infra.hailo_apps.hailo_pipelines.detection_pipeline_simple",
+        "script": "hailo_apps_infra/hailo_apps/hailo_pipelines/detection_pipeline_simple.py",
         "cli": "hailo-simple-detect"
     },
 ]
