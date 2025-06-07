@@ -24,6 +24,11 @@ def get_pipeline_args(suite="default",hef_path=None, override_usb_camera=None , 
       - "show_fps": Append the flag "--show-fps".
       - "dump_dot": Append the flag "--dump-dot".
       - "labels": Append the flag "--labels-json" followed by "resources/labels.json".
+      - "ui": Append the flag "--ui".
+      - "visualize": Append the flag "--visualize".
+      - "mode-train": Set the '--mode' argument to train.
+      - "mode-delete": Set the '--mode' argument to delete.
+      - "mode-run": Set the '--mode' argument to run.
 
     If suite is "default", returns an empty list (i.e. no extra test arguments).
     """
@@ -65,6 +70,16 @@ def get_pipeline_args(suite="default",hef_path=None, override_usb_camera=None , 
             args.append("--dump-dot")
         elif s == "labels":
             args += ["--labels-json", "resources/labels.json"]
+        elif s == "ui":
+            args.append("--ui")
+        elif s == "visualize":
+            args.append("--visualize")
+        elif s == "mode-train":
+            args += ["--mode", "train"]
+        elif s == "mode-delete":
+            args += ["--mode", "delete"]
+        elif s == "mode-run":
+            args += ["--mode", "run"]
     return args
 
 def run_pipeline_generic(cmd: list[str], log_file: str, run_time: int = TEST_RUN_TIME, term_timeout: int = TERM_TIMEOUT):  
