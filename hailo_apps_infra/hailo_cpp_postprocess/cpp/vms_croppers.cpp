@@ -12,6 +12,9 @@
 #define FACE_ATTRIBUTES_CROP_SCALE_FACTOR (1.58f)
 #define FACE_ATTRIBUTES_CROP_HIGHT_OFFSET_FACTOR (0.10f)
 #define TRACK_UPDATE 60
+// #define BLURRINESS_THRESHOLD 150.0
+// #define PROCRUSTES_DISTANCE_THRESHOLD 0.3
+// #define PIXEL_COUNT_THRESHOLD 1200
 
 std::map<int, int> track_counter;
 
@@ -182,6 +185,47 @@ HailoDetectionPtr clone_detection_object(HailoDetectionPtr detection)
 
     return new_roi;
 }
+
+// /**
+//  * Calculates the area of a face detection bounding box in pixels.
+//  * @param bbox The bounding box of the detection.
+//  * @return The area in pixels.
+//  */
+// int calculate_num_pixels(uint width, uint height, const HailoBBox &roi, float size_scale = 1.0, float height_offset = 0.0)
+// {
+//     float old_size = (roi.width() * width + roi.height() * height) / 2;
+//     float size = old_size * size_scale;
+//     float h_size = size / height;
+//     float w_size = size / width;
+//     return h_size * w_size;
+// }
+
+// /**
+//  * @brief Measures the blurriness of an image using the variance of the Laplacian method.
+//  *
+//  * @param image The input image (std::shared_ptr<HailoMat>).
+//  * @return double The variance of the Laplacian, which indicates the blurriness of the image.
+//  */
+// double measure_blurriness(const std::shared_ptr<HailoMat> &image)
+// {
+//     // Convert HailoMat to cv::Mat (assuming HailoMat provides a method to do so)
+//     cv::Mat cv_image = image->to_cv_mat();
+
+//     // Convert the image to grayscale
+//     cv::Mat gray_image;
+//     cv::cvtColor(cv_image, gray_image, cv::COLOR_BGR2GRAY);
+
+//     // Compute the Laplacian of the grayscale image
+//     cv::Mat laplacian;
+//     cv::Laplacian(gray_image, laplacian, CV_64F);
+
+//     // Calculate the variance of the Laplacian
+//     cv::Scalar mean, stddev;
+//     cv::meanStdDev(laplacian, mean, stddev);
+//     double variance_of_laplacian = stddev[0] * stddev[0];
+
+//     return variance_of_laplacian;
+// }
 
 /**
  * @brief Returns a vector of face detections to crop and resize.
