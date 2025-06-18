@@ -90,45 +90,23 @@ def create_hailo_virtualenv(virtual_env_name: str = VIRTUAL_ENV_NAME_DEFAULT,tap
             pyhailort_version = auto_detect_hailort_version()
 
         if not pyhailort_version or not tappas_version:
-            print("⚠️ Could not detect HailoRT or TAPPAS version, please install them manually, or with our script at hailo-apps-infra/scripts/hailo_installation_script.sh.")
+            print("⚠️ Could not detect HailoRT or TAPPAS version, please install them manually, or with our script at hailo-apps-infra/scripts/hailo_installer.sh")
             return
         pytappas_installed = auto_detect_installed_tappas_python_bindings()
         pyhailort_installed = auto_detect_hailort_python_bindings()
-
-    if pytappas_installed and pyhailort_installed:
-        print("⚠️ TAPPAS and HailoRT Python bindings are already installed.")
-        cmd = f"{VENV_CREATE_CMD} --system-site-packages {virtual_env_name}"
-        run_command(cmd, f"Failed to create virtualenv '{virtual_env_name}'")
-        print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
-        return
-    if pytappas_installed:
-        print("⚠️ TAPPAS Python bindings are already installed.")
-        cmd = f"{VENV_CREATE_CMD} --system-site-packages {virtual_env_name}"
-        run_command(cmd, f"Failed to create virtualenv '{virtual_env_name}'")
-        print("Installing HailoRT Python bindings...")
-        # Download and install the HailoRT wheel
-        install_pyhailort(pyhailort_version, str(venv_path))
-        print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
-        return
-    elif pyhailort_installed:
-        print("⚠️ HailoRT Python bindings are already installed.")
-        cmd = f"{VENV_CREATE_CMD} --system-site-packages {virtual_env_name}"
-        run_command(cmd, f"Failed to create virtualenv '{virtual_env_name}'")
+    
+    cmd = f"{VENV_CREATE_CMD} --system-site-packages {virtual_env_name}"
+    run_command(cmd, f"Failed to create virtualenv '{virtual_env_name}'")
+    print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
+    if not pytappas_installed:
         print("installing TAPPAS Python bindings...")
         install_tappas_core(tappas_version, str(venv_path))
-        print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
-        return
-    else:
-        print("🔧 Creating virtualenv without system site packages...")
-        cmd = f"{VENV_CREATE_CMD} {virtual_env_name}"
-        run_command(cmd, f"Failed to create virtualenv '{virtual_env_name}'")
-        print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
-        print("Installing Hailo-Tappas-Core Python bindings...")
-        install_tappas_core(tappas_version, str(venv_path))
-        print("Installing HailoRT Python bindings...")
+
+    if not pyhailort_installed:
+        print("installing HailoRT Python bindings...")
         install_pyhailort(pyhailort_version, str(venv_path))
-        print(f"To activate, run:\n    source {virtual_env_name}/bin/activate")
-        return
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
