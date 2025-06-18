@@ -25,34 +25,36 @@ class Record(LanceModel):
     avg_embedding: Vector(512) # type: ignore the warning
     last_sample_recieved_time: int  # epoch timestamp: In case the last sample removed - not maintend to previous sample time...
     samples_json: str  # Store samples as a JSON string  # [{"embedding", "sample_path", "id"}] (path to sample)
+    classificaiton_confidence_threshold: float
     # optional fields, but default values are set
-    classificaiton_confidence_threshold: float = 0.3  # initial default value
     value: float = 0.0  # in some cases numeric value might be relevant 
 
 class DatabaseHandler:
-    def __init__(self, db_name, table_name, schema):
-        self.db = self.__init_database(db_name = db_name)
+    def __init__(self, db_name, table_name, schema, threshold, database_dir, samples_dir):
+        self.db = self.__init_database(db_name=db_name, database_dir=database_dir, samples_dir=samples_dir)
         self.tbl_records = self.__init_table(
             self.db,
             table_name=table_name,
             schema=schema,
             indexes=[('global_id', 'BTREE'), ('label', 'BTREE')]
         )
+        self.classificaiton_confidence_threshold = threshold  # Default classification confidence threshold
 
-    def __init_database(self, db_name: str):
+    def __init_database(self, db_name: str, database_dir: str, samples_dir: str):
         """
         Initializes the LanceDB database.
 
         Args:
             db_name (str): The name of the database file.
+            database_dir (str): The directory where the database file will be stored.
+            samples_dir (str): The directory where sample files will be stored.
 
         Returns:
             lancedb.LanceDB: The connected database instance.
         """
-        database_dir = get_resource_path(pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_DATABASE_DIR_NAME)
         os.makedirs(database_dir, exist_ok=True)  # Create the directory if it doesn't exist
         db = lancedb.connect(uri=os.path.join(database_dir, db_name))  # Connect to the database
-        self.samples_dir = get_resource_path(pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_SAMPLES_DIR_NAME)
+        self.samples_dir = samples_dir
         return db
 
     def __init_table(self, db, table_name: str, schema=None, indexes=None):
@@ -101,9 +103,10 @@ class DatabaseHandler:
                         label=label, 
                         avg_embedding=embedding.tolist(),
                         last_sample_recieved_time=timestamp, 
-                        samples_json = json.dumps([{"embedding": embedding.tolist(), 
-                                                    "sample_path": sample, 
-                                                    "id": str(uuid.uuid4())}]))
+                        samples_json=json.dumps([{"embedding": embedding.tolist(),
+                                                  "sample_path": sample,
+                                                  "id": str(uuid.uuid4())}]),
+                        classificaiton_confidence_threshold=self.classificaiton_confidence_threshold)
         self.tbl_records.add([record])
         if len(self.tbl_records.search().to_list()) > 256:
             self.tbl_records.create_index(vector_column_name='embedding', metric="cosine", replace=True)
@@ -180,7 +183,14 @@ class DatabaseHandler:
             search_result[0]['samples_json'] = json.loads(search_result[0]['samples_json'])
             if (1 - search_result[0]['_distance']) > search_result[0]['classificaiton_confidence_threshold']:  # if search_result[0]['_distance']>1 the condition is false by default (1-1.1=-0.1) because default value if 0.3
                 return search_result[0]
-        return None
+        # No match from DB
+        return {'global_id': str(uuid.uuid4()),
+                'label': 'Unknown', 
+                'avg_embedding': None,
+                'last_sample_recieved_time': None, 
+                'samples_json': None,
+                'classificaiton_confidence_threshold': None,
+                '_distance': 0.0}
 
     def update_record_label(self, global_id: str, label: str = 'Unknown') -> None:
         """
@@ -201,6 +211,23 @@ class DatabaseHandler:
             classificaiton_confidence_threshold (str): The new classificaiton confidence threshold to associate with the record.
         """
         self.tbl_records.update(where=f"global_id = '{global_id}'", values={'classificaiton_confidence_threshold': classificaiton_confidence_threshold})
+
+    def update_classification_confidence_threshold_for_all(self, new_threshold: float) -> None:
+        """
+        Updates the classification_confidence_threshold for all records in the LanceDB table.
+
+        Args:
+            new_threshold (float): The new confidence threshold value to set for all records.
+        """
+        # Get all records from the database
+        records = self.get_all_records()
+        # Iterate through each record and update the classification_confidence_threshold
+        for record in records:
+            global_id = record['global_id']  # Assuming each record has a unique global_id
+            self.tbl_records.update(
+                where=f"global_id = '{global_id}'",
+                values={'classificaiton_confidence_threshold': new_threshold}
+            )
 
     def delete_record(self, global_id: str) -> None:
         """
@@ -344,11 +371,10 @@ class DatabaseHandler:
         Returns:
             Dict[str, Any]: The record record.
         """
-        result = self.tbl_records.search().where(f"label = '{label}'").to_list()[0]
-        if result:
-            result['samples_json'] = json.loads(result['samples_json'])
-            return result
-        return None
+        results = self.tbl_records.search().where(f"label = '{label}'").to_list()
+        if not results:  # Check if the list is empty
+            return None  # Return None if no records are found
+        return results[0]  # Return the first record if it exists
 
     def get_records_num_samples(self, global_id: str) -> int:
         """
@@ -374,7 +400,7 @@ class DatabaseHandler:
             float: The classificaiton confidence threshold.
         """
         return self.get_record_by_id(global_id)['classificaiton_confidence_threshold']
-
+    
     def get_records_last_sample_recieved_time(self, global_id: str) -> int:
         """
         Gets the last sample recieved time associated with a record.
@@ -477,8 +503,15 @@ class DatabaseHandler:
     
 if __name__ == "__main__":
     # usage example
-    database_handler = DatabaseHandler(db_name='persons.db', table_name='persons', schema=Record)
+    database_handler = DatabaseHandler(
+        db_name='persons.db', 
+        table_name='persons', 
+        schema=Record, 
+        threshold=0.5,
+        database_dir=get_resource_path(pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_DATABASE_DIR_NAME),
+        samples_dir = get_resource_path(pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_SAMPLES_DIR_NAME))
     all_records = database_handler.get_all_records()
+    alice = database_handler.get_record_by_label(label='Alice')
     db_visualizer = DatabaseVisualizer()
     db_visualizer.set_db_records(all_records)
     db_visualizer.visualize(mode='cli')

@@ -216,13 +216,22 @@ FACE_DETECTION_POSTPROCESS_SO_FILENAME = "libscrfd.so"
 FACE_RECOGNITION_POSTPROCESS_SO_FILENAME = "libface_recognition_post.so"
 FACE_ALIGN_POSTPROCESS_SO_FILENAME = "libvms_face_align.so"
 FACE_CROP_POSTPROCESS_SO_FILENAME = "libvms_croppers.so"
+TRACKER_UPDATE_POSTPROCESS_SO_FILENAME = "libtracker_update.so"
 FACE_RECOGNITION_VIDEO_NAME = "face_recognition.mp4"
 FACE_RECON_DIR_NAME = "face_recon"
 FACE_RECON_DATABASE_DIR_NAME = "database"
 FACE_RECON_TRAIN_DIR_NAME = "train"
 FACE_RECON_SAMPLES_DIR_NAME = "samples"
+FACE_RECON_LOCAL_SAMPLES_DIR_NAME = "faces"
 FACE_DETECTION_JSON_NAME = "scrfd.json"
 FACE_ALGO_PARAMS_JSON_NAME = "face_recon_algo_params.json"
+
+# Multisource pipeline defaults
+MULTISOURCE_APP_TITLE = "Hailo Multisource App"
+MULTISOURCE_PIPELINE = "multisource"
+MULTISOURCE_POSTPROCESS_SO_FILENAME = "libdepth_postprocess.so"
+MULTISOURCE_POSTPROCESS_FUNCTION = "filter_scdepth"
+MULTISOURCE_MODEL_NAME = "scdepthv3"
 
 # Installation & subprocess defaults
 PIP_SHOW_TIMEOUT = 5  # seconds
