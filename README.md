@@ -39,7 +39,7 @@ Before running any application, ensure you activate the Python virtual environme
 **Setup environment:**
 **Note:** This should be run on every new terminal session.
 ```bash
-source set_env.sh
+source setup_env.sh
 ```
 
 #### Simple Object Detection

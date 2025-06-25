@@ -2,7 +2,7 @@
 set -e
 
 # Activate the virtual environment
-source ./set_env.sh
+source ./setup_env.sh
 
 # Directories
 TESTS_DIR="tests"
