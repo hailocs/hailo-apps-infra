@@ -12,7 +12,7 @@ This is lightweight version of the detection example, mainly focusing on demonst
 
 The application will detect and classify various objects.
 
-For more details, pleasee see the full detection application: [Full detection application](../../apps/detection/README.md)
+For more details, please see the full detection application: [Full detection application](../../apps/detection/README.md)
 
 #### Running with Raspberry Pi Camera input:
 ```bash

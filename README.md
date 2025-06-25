@@ -37,9 +37,15 @@ Here are a few of the ready-to-use applications included in this repository.
 Before running any application, ensure you activate the Python virtual environment created during installation. This ensures all dependencies are correctly loaded.
 
 **Setup environment:**
-**Note:** This should be run on every new terminal session.
+
+This should be run on every new terminal session.
 ```bash
 source setup_env.sh
+```
+
+Additionally, in the common case of a Raspberry Pi connected remotely via SSH, add:
+```bash
+export DISPLAY=:0
 ```
 
 #### Simple Object Detection
@@ -92,10 +98,8 @@ For detailed guides on installation, usage, and development, please see our comp
 **[➡️ View the Full Documentation](./doc/README.md)**
 
 The documentation includes:
-*   **[Getting Started](./doc/getting_started/README.md)**: Installation and first steps.
 *   **[User Guide](./doc/user_guide/README.md)**: How to run applications and configure the system.
 *   **[Developer Guide](./doc/developer_guide/README.md)**: How to build your own applications.
-*   **[Architecture Guide](./doc/architecture/README.md)**: A deep dive into the software architecture.
 
 ## License
 
