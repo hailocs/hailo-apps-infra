@@ -1,6 +1,7 @@
-# Hailo Applications
-
 ![Hailo Applications Infrastructure](doc/images/github_applications_infrastructure.png)
+
+# Hailo Applications
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hailo-ai/hailo-rpi5-examples)
 
 Welcome to the Hailo Applications repository! This project provides a foundational infrastructure, reusable components, and practical examples for building and deploying high-performance AI applications using Hailo hardware accelerators.
 
