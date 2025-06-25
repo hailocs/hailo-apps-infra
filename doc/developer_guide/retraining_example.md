@@ -2,7 +2,7 @@
 
 In this example, we’re going to retrain the model to detect barcodes, using the barcode-detector dataset from Kaggle. After the retraining process, we’re going to convert the model to HEF and test it on the Raspberry Pi 5 AI Kit.
 
-### This tutorial was made on a development machine with this spec 
+### This tutorial was created on a development machine with the following specifications 
 
 **Hardware**:
 - CPU: Intel i7-6850K
@@ -17,8 +17,8 @@ In this example, we’re going to retrain the model to detect barcodes, using th
 
 1. Install the Hailo AI SW-Suite from the [Developer Zone](https://hailo.ai/developer-zone/software-downloads/). Alternatively, you can download and install the DFC and the model-zoo into the same virtual environment.
 2. Follow the instructions on the YOLOv8 retraining page: [YOLOv8 Retraining](https://github.com/hailo-ai/hailo_model_zoo/tree/833ae6175c06dbd6c3fc8faeb23659c9efaa2dbe/training/yolov8)
-3. Note in this example we added volume mount with the name `data` to the Docker container.
-4. Download the [barcode-detector](https://www.kaggle.com/datasets/kushagrapandya/barcode-detection) dataset from Kaggle. Make sure that it’s either mapped into the retraining Docker, or copied inside.
+3. Note: In this example, we added a volume mount named `data` to the Docker container.
+4. Download the [barcode-detector](https://www.kaggle.com/datasets/kushagrapandya/barcode-detection) dataset from Kaggle. Ensure that it is either mapped to the retraining Docker container or copied inside.
 
 ### Launch the retraining 
 
@@ -62,13 +62,13 @@ hailomz compile yolov8s --ckpt=barcode-detection.onnx --hw-arch hailo8l --calib-
 You should get a message like this: 
 ![successful-compilation](../images/successful-compilation.png)
 
-### Now, we have the yolov8s.hef. This file can be used on the Raspberry Pi 5 AI Kit.
+### The yolov8s.hef file is now ready and can be used on the Raspberry Pi 5 AI Kit.
 
 Load a custom model’s HEF using the `--hef-path` flag. Default labels are [COCO labels](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml) (80 classes). For custom models with different labels, use the `--labels-path` flag to load your labels file (e.g., `/local_resources/barcode_labels.json`).
 
 The default package installation downloads the network trained in the retraining example above, which can be used as a reference (including `/local_resources/barcode_labels.json`).
 
-To run the example with a custom model (adjust paths and the need in `labels_json`):
+To run the example with a custom model (adjust paths and specify the required 'labels_json' file.):
 ```bash
 cd hailo_apps/hailo_app_python/apps/detection
 python detection.py --labels-json local_resources/barcode_labels.json --hef-path resources/yolov8s-hailo8l-barcode.hef --input resources/barcode.mp4

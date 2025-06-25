@@ -15,7 +15,7 @@ from gi.repository import Gst
         
 # Local application-specific imports
 from hailo_apps.hailo_app_python.core.common.base_ui_callbacks import BaseUICallbacks
-from hailo_apps.hailo_app_python.core.common.db_handler import DatabaseHandler, Record
+from hailo_apps.hailo_app_python.core.common.db_handler import Record
 from hailo_apps.hailo_app_python.core.common.db_visualizer import DatabaseVisualizer
 # endregion imports
 

@@ -48,7 +48,8 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     DEFAULT_LOCAL_RESOURCES_PATH,
     FACE_RECON_DATABASE_DIR_NAME,
     TRACKER_UPDATE_POSTPROCESS_SO_FILENAME,
-    FACE_RECON_LOCAL_SAMPLES_DIR_NAME
+    FACE_RECON_LOCAL_SAMPLES_DIR_NAME,
+    BASIC_PIPELINES_VIDEO_EXAMPLE_NAME
 )
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, CROPPER_PIPELINE, UI_APPSINK_PIPELINE
 # endregion
@@ -92,7 +93,7 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
         else:
             self.arch = self.options_menu.arch
         
-        if self.video_source == 'resources/videos/example.mp4':
+        if BASIC_PIPELINES_VIDEO_EXAMPLE_NAME in self.video_source:
             self.video_source = get_resource_path(pipeline_name=None, resource_type=RESOURCES_VIDEOS_DIR_NAME, model=FACE_RECOGNITION_VIDEO_NAME)
         
         self.train_images_dir = get_resource_path(pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_TRAIN_DIR_NAME) 
