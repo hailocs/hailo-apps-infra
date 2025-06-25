@@ -6,7 +6,7 @@ This guide explains how to run the ready-to-use AI applications included in this
 **Note:** This should be run on every new terminal session.
 This will activate the virtual environment and set the PYTHONPATH.
 ```bash
-source set_env.sh
+source setup_env.sh
 ```
 
 ## Available Applications
