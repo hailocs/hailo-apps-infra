@@ -6,7 +6,7 @@
 #
 # INSTRUCTIONS:
 # 1. Run this script from the project's root directory using the 'source' command.
-# 2. Example: source set_env.sh
+# 2. Example: source setup_env.sh
 #
 # After sourcing, your PYTHONPATH will be set for the current terminal session.
 # Function to check if the script is being sourced
