@@ -31,6 +31,7 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     RESOURCES_GROUP_DEFAULT,
     DEFAULT_CONFIG_PATH,
     DEFAULT_DOTENV_PATH,
+    DEFAULT_RESOURCES_CONFIG_PATH
 )
 from hailo_apps.hailo_app_python.core.installation.set_env import (
     handle_dot_env,
@@ -93,6 +94,12 @@ def post_install():
         help="Name of the virtualenv to create"
     )
     parser.add_argument(
+        "--resources-config",
+        type=str,
+        default=DEFAULT_RESOURCES_CONFIG_PATH,
+        help="Path to the resources config file"
+    )
+    parser.add_argument(
         "--group",
         type=str,
         default=RESOURCES_GROUP_DEFAULT,
@@ -131,7 +138,7 @@ def post_install():
     create_symlink(RESOURCES_ROOT_PATH_DEFAULT, resources_path)
 
     print("⬇️ Downloading resources...")
-    download_resources(group=args.group)
+    download_resources(group=args.group,resource_config_path=args.resources_config)
     print(f"Resources downloaded to {resources_path}")
 
     print("⚙️ Compiling post-process...")
