@@ -94,12 +94,6 @@ def post_install():
         help="Name of the virtualenv to create"
     )
     parser.add_argument(
-        "--resources-config",
-        type=str,
-        default=DEFAULT_RESOURCES_CONFIG_PATH,
-        help="Path to the resources config file"
-    )
-    parser.add_argument(
         "--group",
         type=str,
         default=RESOURCES_GROUP_DEFAULT,
@@ -138,7 +132,7 @@ def post_install():
     create_symlink(RESOURCES_ROOT_PATH_DEFAULT, resources_path)
 
     print("⬇️ Downloading resources...")
-    download_resources(group=args.group,resource_config_path=args.resources_config)
+    download_resources(group=args.group)
     print(f"Resources downloaded to {resources_path}")
 
     print("⚙️ Compiling post-process...")
