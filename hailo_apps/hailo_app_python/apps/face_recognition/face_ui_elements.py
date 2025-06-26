@@ -109,11 +109,8 @@ class UIElements(BaseUIElements):
                 # Add the logo just above the footer
                 # Define the original file and the alias (symlink) paths
                 original_file = get_resource_path(pipeline_name=None, resource_type=DEFAULT_LOCAL_RESOURCES_PATH, model=HAILO_LOGO_PHOTO_NAME) 
-                print(f"Original file path: {original_file}")
                 alias_file = Path(Path(__file__).parent, HAILO_LOGO_PHOTO_NAME)
-                print(f"Alias file path: {alias_file}")
                 if not (alias_file.exists() or alias_file.is_symlink()):
-                    print(f"Creating symlink for {alias_file} to {original_file}")
                     alias_file.symlink_to(original_file)
                 with gr.Column():
                     gr.HTML(

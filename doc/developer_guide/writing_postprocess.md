@@ -1,11 +1,11 @@
 # Writing Your Own Post-Process for Hailo Apps
 
-So you want to add a new network to Hailo-apps-infra that isn't supported yet? You've come to the right place! This guide will walk you through creating your own post-process. Don't worry - it's easier than it sounds.
-This guide describes how to create a post-process function written in C++ that can be used in the HailoApps framework. Using the 'hailofilter' element.
+So you want to add a new network to Hailo-apps-infra that isn't supported yet? You've come to the right place! This guide will walk you through creating your own post-process. Don't worry—it's easier than it sounds.
+This guide describes how to create a post-process function written in C++ that can be used in the HailoApps framework. This is done using the 'hailofilter' element.
 **Note** For python post-process, you can add your post-process function as a python callback function.
 
 ## Getting Started
-The post-process function should read the outputs of the HailoNet element which are tensor that are attached to the HailoROI object. The post-process function should remove the tensor from the HailoROI object and replace them with the post-process results. i.e. HailoDetection, HailoClassification, etc.
+The post-process function should read the outputs of the HailoNet element, which are tensors attached to the HailoROI object. The post-process function should remove the tensors from the HailoROI object and replace them with the post-process results. i.e. HailoDetection, HailoClassification, etc.
 
 ### Where to Put Your Files
 
@@ -163,7 +163,7 @@ void filter(HailoROIPtr roi)
 Now add this helper function to create demo detections:
 
 ```cpp
-std.vector<HailoDetection> demo_detection_objects()
+std::vector<HailoDetection> demo_detection_objects()
 {
     std::vector<HailoDetection> objects;
 
@@ -187,7 +187,7 @@ std.vector<HailoDetection> demo_detection_objects()
 }
 ```
 
-**Important note:** The bounding box coordinates are percentages of the image size (0.0 to 1.0), not pixel values. This keeps your detections correct even when the image is resized.
+**Important note:** The bounding box coordinates are percentages of the image size (0.0 to 1.0), not pixel values. This ensures your detections remain accurate even when the image is resized.
 
 ## Seeing Your Results
 

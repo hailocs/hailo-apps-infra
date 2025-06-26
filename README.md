@@ -1,6 +1,7 @@
-# Hailo Applications
-
 ![Hailo Applications Infrastructure](doc/images/github_applications_infrastructure.png)
+
+# Hailo Applications
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hailo-ai/hailo-rpi5-examples)
 
 Welcome to the Hailo Applications repository! This project provides a foundational infrastructure, reusable components, and practical examples for building and deploying high-performance AI applications using Hailo hardware accelerators.
 
@@ -37,9 +38,15 @@ Here are a few of the ready-to-use applications included in this repository.
 Before running any application, ensure you activate the Python virtual environment created during installation. This ensures all dependencies are correctly loaded.
 
 **Setup environment:**
-**Note:** This should be run on every new terminal session.
+
+This should be run on every new terminal session.
 ```bash
-source set_env.sh
+source setup_env.sh
+```
+
+Additionally, in the common case of a Raspberry Pi connected remotely via SSH, add:
+```bash
+export DISPLAY=:0
 ```
 
 #### Simple Object Detection
@@ -92,10 +99,8 @@ For detailed guides on installation, usage, and development, please see our comp
 **[➡️ View the Full Documentation](./doc/README.md)**
 
 The documentation includes:
-*   **[Getting Started](./doc/getting_started/README.md)**: Installation and first steps.
 *   **[User Guide](./doc/user_guide/README.md)**: How to run applications and configure the system.
 *   **[Developer Guide](./doc/developer_guide/README.md)**: How to build your own applications.
-*   **[Architecture Guide](./doc/architecture/README.md)**: A deep dive into the software architecture.
 
 ## License
 
