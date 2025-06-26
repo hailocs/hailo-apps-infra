@@ -30,7 +30,7 @@ class GStreamerDetectionApp(GStreamerApp):
         # Additional initialization code can be added here
         self.video_width = 640
         self.video_height = 640
-        
+
         # Set Hailo parameters - these parameters should be set based on the model used
         self.batch_size = 2
         nms_score_threshold = 0.3
@@ -53,12 +53,12 @@ class GStreamerDetectionApp(GStreamerApp):
 
         if self.options_menu.hef_path is not None:
             self.hef_path = self.options_menu.hef_path
-        else: 
+        else:
             self.hef_path = get_resource_path(
                 pipeline_name=SIMPLE_DETECTION_PIPELINE,
                 resource_type=RESOURCES_MODELS_DIR_NAME,
             )
-        
+
         print(f"Using HEF path: {self.hef_path}")
 
         self.post_process_so = get_resource_path(
@@ -91,7 +91,7 @@ class GStreamerDetectionApp(GStreamerApp):
                                           video_width=self.video_width, video_height=self.video_height,
                                           frame_rate=self.frame_rate, sync=self.sync,
                                           no_webcam_compression=True)
-        
+
         detection_pipeline = INFERENCE_PIPELINE(
             hef_path=self.hef_path,
             post_process_so=self.post_process_so,
