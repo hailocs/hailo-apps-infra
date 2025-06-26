@@ -31,6 +31,7 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     RESOURCES_GROUP_DEFAULT,
     DEFAULT_CONFIG_PATH,
     DEFAULT_DOTENV_PATH,
+    DEFAULT_RESOURCES_CONFIG_PATH
 )
 from hailo_apps.hailo_app_python.core.installation.set_env import (
     handle_dot_env,
