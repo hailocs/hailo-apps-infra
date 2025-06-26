@@ -9,6 +9,8 @@ import logging
 import os
 import urllib.request
 
+import yaml
+
 
 
 
@@ -44,9 +46,71 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     )
 
 
-
 logger = logging.getLogger("resource-downloader")
 logging.basicConfig(level=logging.INFO)
+
+# ─── create_default_config, download_file, download_resources ──────────────────────
+def create_default_config():
+    """Create the default resources configuration."""
+    default_config = {
+        'default': [
+            'yolov6n',
+            'scdepthv3',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/video/example.mp4',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/video/example_640.mp4',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/video/face_recognition.mp4',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/scrfd.json'
+        ],
+        'hailo8': [
+            'yolov8m',
+            'yolov5m_seg',
+            'yolov8m_pose',
+            'scrfd_10g',
+            'arcface_mobilefacenet'
+        ],
+        'hailo8l': [
+            'yolov8s',
+            'yolov5n_seg',
+            'yolov8s_pose',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l_rpi/scrfd_2.5g.hef',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l_rpi/arcface_mobilefacenet_h8l.hef'
+        ],
+        'all': [
+            'yolov8s_pose',
+            'yolov8s',
+            'yolov8m_pose',
+            'yolov8m',
+            'yolov6n',
+            'yolov5n_seg',
+            'yolov5m_wo_spp',
+            'yolov5m_seg',
+            'yolov11s',
+            'yolov11n',
+            'scdepthv3'
+        ],
+        'retrain': [
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l_rpi/yolov8s-hailo8l-barcode.hef',
+            'https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/video/barcode.mp4'
+        ]
+    }
+    return default_config
+
+def create_config_at_path(config_path: str = None):
+    """Create default config at specified path."""
+    cfg_path = None
+    if config_path is None:
+        cfg_path = Path("/usr/local/hailo/resources/resources_config.yaml")
+    else:
+        cfg_path = Path(config_path)
+    
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    default_config = create_default_config()
+    with open(cfg_path, 'w') as f:
+        yaml.dump(default_config, f, default_flow_style=False, indent=2)
+    
+    print(f"Default configuration created at {cfg_path}")
+    return cfg_path  # Return Path object
 
 
 def download_file(url: str, dest_path: Path):
@@ -62,6 +126,11 @@ def download_resources(group: str = None,
                        resource_config_path: str = None, arch: str = None):
     # 1) Load your YAML config (expects a mapping: group -> [entries])
     cfg_path = Path(resource_config_path or DEFAULT_RESOURCES_CONFIG_PATH)
+    if not cfg_path.is_file():
+        print(f"❌ Config file not found at {cfg_path}", file=sys.stderr)
+        print("Creating a default config file...")
+        cfg_path = create_config_at_path()
+    print(f"Loading resources config from {cfg_path}")
     config = load_config(cfg_path)
 
     # 2) Detect architecture & version
