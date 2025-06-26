@@ -1,42 +1,61 @@
 # Repository Structure Guide
 
-This document provides an overview of the directory structure for the Hailo Applications repository, explaining the purpose of each key folder.
+This document provides an overview of the directory structure for the Hailo Applications repository, explaining the purpose of each key folder and clarifying which directories are tracked by git and which are generated or managed by scripts.
 
 ```
-hailo-apps/
-├── doc/                            # Comprehensive documentation
-├── hailo_apps_infra/
-│   ├── hailo_core/                 # Core infrastructure and utilities
-│   └── hailo_apps/                 # Reusable GStreamer components and applications
-├── scripts/                        # Installation and utility scripts
-├── tests/                          # Test suite for the project
-├── install.sh                      # Main installation script
-└── pyproject.toml                  # Package configuration for installation
+hailo-apps-internal/
+├── doc/                        # Comprehensive documentation (user & developer guides)
+│   ├── user_guide/             # User-facing documentation (this file, installation, etc.)
+│   ├── developer_guide/        # Developer-focused documentation
+│   └── images/                 # Images for documentation
+├── hailo_apps/                 # Main AI application package (Python)
+│   └── hailo_app_python/       # Contains 'apps/' (AI apps) and 'core/' (shared logic)
+│       ├── apps/               # Individual AI application folders (detection, pose, etc.)
+│       └── core/               # Shared logic, utilities, and GStreamer integration
+│           ├── common/         # Foundational utilities (installation, configuration, helpers)
+│           ├── gstreamer/      # Reusable GStreamer components and pipelines
+│           ├── cpp_postprocess/# C++ post-processing modules for AI outputs
+│           └── installation/   # Installation and environment setup utilities
+├── scripts/                    # Installation and utility shell scripts
+├── tests/                      # Pytest-based test suite
+├── config/                     # Configuration files (YAML, etc.)
+├── local_resources/            # Local assets, images, and configuration (not tracked by git)
+├── hailo_temp_resources/       # Temporary installation packages (not tracked by git)
+├── resources                   # Symlink to shared models/videos (see below)
+├── venv_hailo_apps/            # Python virtual environment (not tracked by git)
+├── hailo_apps.egg-info/        # Python package metadata (generated, not tracked)
+├── install.sh                  # Main installation script
+├── pyproject.toml              # Python package configuration
 ```
 
 ## Key Directories
 
 ### `doc/`
-This directory contains all the project documentation, including user guides, developer guides, and architectural overviews. It's the best place to start if you have questions about how to use or extend the repository.
+Contains all project documentation, including user guides, developer guides, and architectural overviews.
 
-### `hailo_apps_infra/`
-This is the heart of the repository, containing all the core Python source code. It is structured as a Python package.
+### `hailo_apps/`
+Main Python package for AI applications. Contains:
+- **`hailo_app_python/`**:
+  - `apps/`: Individual AI application folders (e.g., detection, face_recognition, etc.)
+  - `core/`: Shared logic, utilities, and GStreamer integration for apps.
+    - `common/`: Foundational utilities (installation, configuration, helpers).
+    - `gstreamer/`: Reusable GStreamer components and pipelines.
+    - `cpp_postprocess/`: C++ post-processing modules for AI outputs.
+    - `installation/`: Installation and environment setup utilities.
 
-*   **`hailo_core/`**: Contains the foundational utilities that support the entire ecosystem. This includes installation scripts, configuration management, and common helper functions that are used across all applications.
-*   **`hailo_apps/`**: Contains the AI applications themselves. This directory is further subdivided into reusable GStreamer components and the final, runnable application scripts.
+### `resources/`
+After running the installation script, you will see a `resources` directory in the root of the project. This is usually a **symbolic link** (symlink) to a system-wide directory, typically `/usr/local/hailo/resources` or `/usr/share/hailo_resources`.
+
+- **What it is**: A shortcut to a central location for large files needed by the applications (models, videos, assets).
+- **Why a symlink**: Avoids duplication of large files across projects. All Hailo applications can share a single pool of models and videos, saving disk space and simplifying resource management.
+- **How it's created**: The install script creates this symlink if it doesn't exist.
+
+### `venv_hailo_apps/`
+Python virtual environment for local development. Not tracked by git.
 
 ### `scripts/`
-This directory holds various shell scripts used for installation, environment setup, and other utility tasks. The main `install.sh` script orchestrates many of the scripts found here.
-
-### `tests/`
-This directory contains the test suite for the project, primarily using the `pytest` framework. These tests ensure the reliability and correctness of the infrastructure and applications.
+Shell scripts for installation, environment setup, and utilities. The main `install.sh` orchestrates many of these scripts.
 
 ---
 
-## The `resources` Directory
-
-After running the installation script, you will see a `resources` directory in the root of the project. This is not a regular directory, but rather a **symbolic link** (or symlink).
-
-*   **What it is**: It's a shortcut that points to a system-wide directory, `/usr/share/hailo_resources`.
-*   **What it contains**: This central location stores all the large files needed by the applications, such as the compiled AI models (`.hef` files), videos for demonstration, and other assets.
-*   **Why it's a symlink**: By using a symlink, we avoid duplicating large files across multiple projects. All your Hailo applications can share a single, central pool of models and videos, saving disk space and making resource management easier. You can add your own models to this directory, and they will be accessible to all applications.
+For more details on each application or component, see the respective README files in their directories.

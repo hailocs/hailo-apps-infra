@@ -6,11 +6,7 @@ This guide provides comprehensive instructions for installing the Hailo Applicat
 
 - [Hailo Software Installation Guide](#hailo-software-installation-guide)
   - [Table of Contents](#table-of-contents)
-  - [Quick Start (Automated Recommended)](#quick-start-automated-recommended)
-  - [x86\_64 Ubuntu Installation](#x86_64-ubuntu-installation)
-    - [Prerequisites for x86](#prerequisites-for-x86)
-    - [Installation Steps for x86](#installation-steps-for-x86)
-    - [Manual Installation for x86](#manual-installation-for-x86)
+  - [Automated Installation (Recommended)](#automated-installation-recommended)
   - [Raspberry Pi Installation](#raspberry-pi-installation)
     - [Hardware Setup for RPi](#hardware-setup-for-rpi)
     - [Software Setup for RPi](#software-setup-for-rpi)
@@ -20,9 +16,12 @@ This guide provides comprehensive instructions for installing the Hailo Applicat
 
 ---
 
-## Quick Start (Automated Recommended)
+## Automated Installation (Recommended)
 
 This is the easiest and recommended way to get started on any supported platform. The script automatically detects your environment and installs the appropriate packages.
+This script supports both x86_64 Ubuntu and Raspberry Pi.
+On the Raspberry Pi, make sure you first install the HW and SW as described in the [Raspberry Pi Installation](#raspberry-pi-installation) section.
+
 
 ```bash
 # 1. Clone the repository
@@ -48,93 +47,49 @@ For more options, such as using a custom virtual environment name:
 ./install.sh --all
 ```
 
-For newer versions, please visit the [Hailo Developer Zone](https://hailo.ai/developer-zone/).
 
 <details>
-<summary><b>Manual Installation for x86 (Advanced)</b></summary>
+<summary><b>Manual Installation (Advanced)</b></summary>
 
-If you need full control over the process:
-
-1.  **Create & activate a virtual environment**
-    ```bash
-    python3 -m venv your_venv_name --system-site-packages
-    source your_venv_name/bin/activate
-    ```
-2.  **Install Hailo Python packages**
-    This script will install the HailoRT driver, runtime, and Tappas libraries.
-    ```bash
-    ./scripts/hailo_python_installation.sh
-    ```
-3.  **Install repository dependencies**
-    ```bash
-    pip install --upgrade pip
-    pip install -e .
-    ```
-4.  **Run post-install setup**
-    This downloads models and configures the environment.
-    ```bash
-    hailo-post-install
-    ```
-</details>
-
----
-
-## x86_64 Ubuntu Installation
-
-These instructions are for installing the Hailo software stack on a standard x86_64 machine running Ubuntu 22.04.
-
-### Prerequisites for x86
-
-* **Operating System**: Ubuntu 22.04
-* **Hardware**: Hailo-8, Hailo-8L, or Hailo-10H accelerator.
-* **Software**:
-  * Python 3.10
-  * `git`, `python3-venv`
-
-### Installation Steps for x86
+If you need full control over the process use the following instructions.
 
 The `hailo_installer.sh` script handles the installation of the HailoRT and Tappas Core libraries. The main `install.sh` script in the root directory will run this for you, but you can also run it manually for custom installations.
 
-**Default Installation:**
+1. **HailoRT and TAPPAS-CORE Installation:**
 ```bash
 ./scripts/hailo_installer.sh
 ```
-This installs the default versions of HailoRT (4.20.0) and Tappas Core (3.31.0).
+This installs the default versions of HailoRT and TAPPAS-CORE.
+On the Raspberry Pi, use their apt server.
+For additional versions, please visit the [Hailo Developer Zone](https://hailo.ai/developer-zone/).
 
-**Custom Version Installation:**
-If you need specific versions, use the following flags:
-```bash
-./scripts/hailo_installer.sh \
-  --hailort-version=4.20.0 \
-  --tappas-core-version=3.31.0
-```
-
-For newer versions, please visit the [Hailo Developer Zone](https://hailo.ai/developer-zone/).
-
-### Manual Installation for x86
-
-If you need full control over the process:
-
-1.  **Create & activate a virtual environment**
+2.  **Create & activate a virtual environment**
     ```bash
     python3 -m venv your_venv_name --system-site-packages
     source your_venv_name/bin/activate
     ```
-2.  **Install Hailo Python packages**
-    This script will install the HailoRT driver, runtime, and Tappas libraries.
+We use system-site-packages to inherit python packages from the system.
+On the Raspberry Pi, the hailoRT and TAPPAS-CORE python bindings are installed on the system. As part of hailo-all installation.
+On the x86_64 Ubuntu, the hailoRT and TAPPAS-CORE python bindings can be installed inside the virtual environment.
+Note that also on the x86_64 Ubuntu, the gi library is installed on the system (apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0). You can try installing using pip but it is not recommended.
+
+3.  **Install Hailo Python packages**
+    This script will install the HailoRT and TAPPAS-CORE python bindings.
     ```bash
     ./scripts/hailo_python_installation.sh
     ```
-3.  **Install repository dependencies**
+4.  **Install repository**
     ```bash
     pip install --upgrade pip
     pip install -e .
     ```
-4.  **Run post-install setup**
+5.  **Run post-install setup**
     This downloads models and configures the environment.
     ```bash
     hailo-post-install
     ```
+
+</details>
 
 ---
 
@@ -235,6 +190,6 @@ To remove the environment and downloaded resources:
 deactivate
 
 # Delete project files and logs
-sudo rm -rf hailo_infra_venv/ resources/ hailort.log .env hailo_apps_infra.egg-info
+sudo rm -rf venv_hailo_apps/ resources/ hailort.log .env hailo_apps.egg-info
 ```
 To uninstall system packages, use `apt remove`.
