@@ -49,3 +49,6 @@ include = ["hailo_apps*"]
     "compile_postprocess.sh",
     "cpp/**/*",
 ]
+"hailo_apps" = [
+    "config/*.yaml",
+]
