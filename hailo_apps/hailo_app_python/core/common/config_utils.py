@@ -78,11 +78,14 @@ def validate_config(config: dict) -> bool:
             print(f"Invalid value '{val}'. Valid options: {valid_choices}")
     return valid_config
 
-def load_and_validate_config(config_path: str) -> dict:
+def load_and_validate_config(config_path: str = None) -> dict:
     """
     Load and validate the configuration file.
     Returns the loaded configuration as a dictionary.
     """
+    if config_path is None or not Path(config_path).is_file():
+        # Load default config if no path is provided
+        return load_default_config()
     cfg_path = Path(config_path)
     config = load_config(cfg_path)
     if not validate_config(config):
