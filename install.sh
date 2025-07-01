@@ -6,10 +6,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DOWNLOAD_GROUP="default"
 VENV_NAME="venv_hailo_apps"
+PYHAILORT_PATH=""
+PYTAPPAS_PATH=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -n|--venv-name)
       VENV_NAME="$2"
+      shift 2
+      ;;
+    -h|--pyhailort)
+      PYHAILORT_PATH="$2"
+      shift 2
+      ;;
+    -p|--pytappas)
+      PYTAPPAS_PATH="$2"
       shift 2
       ;;
     --all)
@@ -105,6 +116,25 @@ echo "🔌 Activating venv: ${VENV_NAME}"
 # shellcheck disable=SC1090
 source "${VENV_PATH}/bin/activate"
 
+if [[ -n "$PYHAILORT_PATH" ]]; then
+  echo "Using custom HailoRT Python binding path: $PYHAILORT_PATH"
+  if [[ ! -f "$PYHAILORT_PATH" ]]; then
+    echo "❌ HailoRT Python binding not found at $PYHAILORT_PATH"
+    exit 1
+  fi
+  pip install "$PYHAILORT_PATH"
+  INSTALL_HAILORT= false
+fi
+if [[ -n "$PYTAPPAS_PATH" ]]; then
+  echo "Using custom TAPPAS Python binding path: $PYTAPPAS_PATH"
+  if [[ ! -f "$PYTAPPAS_PATH" ]]; then
+    echo "❌ TAPPAS Python binding not found at $PYTAPPAS_PATH"
+    exit 1
+  fi
+  pip install "$PYTAPPAS_PATH"
+  INSTALL_TAPPAS_CORE=false
+fi
+
 # run  hailo python packages installation script
 echo "📦 Installing Python Hailo packages…"
 FLAGS=""
@@ -117,7 +147,12 @@ if [[ "$INSTALL_HAILORT" = true ]]; then
   FLAGS="${FLAGS} --hailort-version=${HAILORT_VERSION}"
 fi
 
-./scripts/hailo_python_installation.sh ${FLAGS}
+if [[ -z "$FLAGS" ]]; then
+  echo "No Hailo Python packages to install."
+else
+  echo "Installing Hailo Python packages with flags: ${FLAGS}"
+  ./scripts/hailo_python_installation.sh ${FLAGS}
+fi
 
 python3 -m pip install --upgrade pip setuptools wheel
 
