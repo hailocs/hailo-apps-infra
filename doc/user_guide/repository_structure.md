@@ -44,11 +44,11 @@ Main Python package for AI applications. Contains:
     - `installation/`: Installation and environment setup utilities.
 
 ### `resources/`
-After running the installation script, you will see a `resources` directory in the root of the project. This is usually a **symbolic link** (symlink) to a system-wide directory, typically `/usr/local/hailo/resources` or `/usr/share/hailo_resources`.
+After running the installation script, you will see a `resources` directory in the root of the project. This is a **symbolic link** (symlink) to a system-wide directory, `/usr/local/hailo/resources`.
 
 - **What it is**: A shortcut to a central location for large files needed by the applications (models, videos, assets).
 - **Why a symlink**: Avoids duplication of large files across projects. All Hailo applications can share a single pool of models and videos, saving disk space and simplifying resource management.
-- **How it's created**: The install script creates this symlink if it doesn't exist.
+- **How it's created**: The post install script creates this symlink if it doesn't exist.
 
 ### `venv_hailo_apps/`
 Python virtual environment for local development. Not tracked by git.
