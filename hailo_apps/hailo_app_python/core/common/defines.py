@@ -218,6 +218,9 @@ MULTISOURCE_POSTPROCESS_SO_FILENAME = "libdepth_postprocess.so"
 MULTISOURCE_POSTPROCESS_FUNCTION = "filter_scdepth"
 MULTISOURCE_MODEL_NAME = "scdepthv3"
 
+# RTSP pipeline defaults
+RTSP_APP_TITLE = "Hailo RTSP App"
+
 # Installation & subprocess defaults
 PIP_SHOW_TIMEOUT = 5  # seconds
 INSTALL_LOG = "env_setup.log"

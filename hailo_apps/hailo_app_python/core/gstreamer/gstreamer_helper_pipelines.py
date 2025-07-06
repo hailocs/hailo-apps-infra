@@ -18,6 +18,8 @@ def get_source_type(input_source):
         return 'libcamera'
     elif input_source.startswith('0x'):
         return 'ximage'
+    elif input_source.startswith('rtsp://'):
+        return 'rtsp'
     else:
         return 'file'
 
@@ -105,6 +107,12 @@ def SOURCE_PIPELINE(video_source, video_width=640, video_height=640,
             f'ximagesrc xid={video_source} ! '
             f'{QUEUE(name=f"{name}queue_scale_")} ! '
             f'videoscale ! '
+        )
+    elif source_type == 'rtsp':  # RTSP stream handling
+        source_element = (
+            f'rtspsrc location="{video_source}" name={name} ! '
+            f'{QUEUE(name=f"{name}_queue_decode")} ! '
+            f'decodebin name={name}_decodebin ! '
         )
     else:
         source_element = (
