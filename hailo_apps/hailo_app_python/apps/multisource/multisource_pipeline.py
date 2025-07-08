@@ -2,20 +2,21 @@
 # Standard library imports
 import setproctitle
 import json
+import time
 import os
 
 # Third-party imports
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
+import numpy as np
 
 # Local application-specific imports
 import hailo
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path, get_resource_path
-from hailo_apps.hailo_app_python.core.common.db_handler import DatabaseHandler, Record
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.hailo_app_python.core.common.buffer_utils import get_caps_from_pad, get_numpy_from_buffer
-from hailo_apps.hailo_app_python.core.common.defines import MULTI_SOURCE_DIR_NAME, MULTI_SOURCE_DATABASE_DIR_NAME, MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTISOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
+from hailo_apps.hailo_app_python.core.common.defines import MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import get_source_type, USER_CALLBACK_PIPELINE, TRACKER_PIPELINE, QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, DISPLAY_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class
 # endregion imports
@@ -39,7 +40,7 @@ class GStreamerMultisourceApp(GStreamerApp):
         else:
             self.arch = self.options_menu.arch
 
-        setproctitle.setproctitle(MULTISOURCE_APP_TITLE)  # Set the process title
+        setproctitle.setproctitle(MULTI_SOURCE_APP_TITLE)  # Set the process title
 
         self.hef_path = get_resource_path(SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME)
         self.post_process_so = get_resource_path(SIMPLE_DETECTION_PIPELINE, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME)
@@ -56,20 +57,11 @@ class GStreamerMultisourceApp(GStreamerApp):
         self.create_pipeline()
         self.connect_src_callbacks()
 
-        # Initialize the database and table
-        self.db_handler = DatabaseHandler(db_name='cross_tracked.db', 
-                                          table_name='cross_tracked', 
-                                          schema=Record, 
-                                          threshold=self.algo_params['lance_db_vector_search_classificaiton_confidence_threshold'],
-                                          database_dir=get_resource_path(pipeline_name=None, resource_type=MULTI_SOURCE_DIR_NAME, model=MULTI_SOURCE_DATABASE_DIR_NAME),
-                                          samples_dir=None)
-
     def get_pipeline_string(self):
         sources_string = ''
         router_string = ''
 
         tappas_post_process_dir = os.environ.get(TAPPAS_POSTPROC_PATH_KEY, '')
-        tappas_post_process_dir = '/usr/lib/aarch64-linux-gnu/hailo/tappas/post_processes'  # TODO
         set_stream_id_so = os.path.join(tappas_post_process_dir, 'libstream_id_tool.so')
         for id in range(self.num_sources):
             sources_string += SOURCE_PIPELINE(video_source=self.video_sources_types[id][0], 
@@ -106,21 +98,15 @@ class GStreamerMultisourceApp(GStreamerApp):
     def generate_callbacks(self):
         # Dynamically define callback functions per sources
         for id in range(self.num_sources):
-            def callback_function(pad, info, user_data, id=id):
+            def callback_function(pad, info, user_data, id=id):  # roi.get_stream_id() == id
                 buffer = info.get_buffer()
                 if buffer is None:
                     return Gst.PadProbeReturn.OK
                 roi = hailo.get_roi_from_buffer(buffer)
                 detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
-                string_to_print = ''
-                track_id = -1
                 for detection in detections:
-                    if detection.get_label() == "person":
-                        track = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)
-                        if len(track) == 1:
-                            track_id = track[0].get_id()
-                        string_to_print += (f"Callback source: {id}, person track id: {track_id}\n")
-                print(string_to_print)
+                    track_id = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
+                    print(f'{roi.get_stream_id()}_{detection.get_label()}_{track_id}')
                 return Gst.PadProbeReturn.OK
 
             # Attach the callback function to the instance
@@ -134,46 +120,14 @@ class GStreamerMultisourceApp(GStreamerApp):
             identity_pad.add_probe(Gst.PadProbeType.BUFFER, callback_function, self.user_data)
 
 def app_callback(pad, info, user_data):
-    # Get the GstBuffer from the probe info
     buffer = info.get_buffer()
-    # Check if the buffer is valid
     if buffer is None:
         return Gst.PadProbeReturn.OK
-
-    # Using the user_data to count the number of frames
-    user_data.increment()
-    string_to_print = f"Frame count: {user_data.get_count()}\n"
-
-    # Get the caps from the pad
-    format, width, height = get_caps_from_pad(pad)
-
-    # If the user_data.use_frame is set to True, we can get the video frame from the buffer
-    frame = None
-    if user_data.use_frame and format is not None and width is not None and height is not None:
-        # Get video frame
-        frame = get_numpy_from_buffer(buffer, format, width, height)
-
-    # Get the detections from the buffer
     roi = hailo.get_roi_from_buffer(buffer)
     detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
-    print(roi.get_stream_id())
-
-    # Parse the detections
-    detection_count = 0
     for detection in detections:
-        label = detection.get_label()
-        bbox = detection.get_bbox()
-        confidence = detection.get_confidence()
-        if label == "person":
-            # Get track ID
-            track_id = 0
-            track = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)
-            if len(track) == 1:
-                track_id = track[0].get_id()
-            string_to_print += (f"Detection: ID: {track_id} Label: {label} Confidence: {confidence:.2f}\n")
-            detection_count += 1
-
-    # print(string_to_print)
+        track_id = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
+        print(f'Unified callback, {roi.get_stream_id()}_{detection.get_label()}_{track_id}')
     return Gst.PadProbeReturn.OK
 
 def main():
