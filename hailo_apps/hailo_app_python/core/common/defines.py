@@ -217,6 +217,9 @@ MULTISOURCE_PIPELINE = "multisource"
 MULTISOURCE_POSTPROCESS_SO_FILENAME = "libdepth_postprocess.so"
 MULTISOURCE_POSTPROCESS_FUNCTION = "filter_scdepth"
 MULTISOURCE_MODEL_NAME = "scdepthv3"
+MULTI_SOURCE_PARAMS_JSON_NAME = "multisource_params.json"
+MULTI_SOURCE_DIR_NAME = "multi_source"
+MULTI_SOURCE_DATABASE_DIR_NAME = "database"
 
 # RTSP pipeline defaults
 RTSP_APP_TITLE = "Hailo RTSP App"
