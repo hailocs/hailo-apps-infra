@@ -24,3 +24,18 @@ def compile_postprocess():
     if ret.returncode:
         logger.error(f"C++ postprocess build failed (exit {ret.returncode})")
         sys.exit(ret.returncode)
+
+def main():
+    """
+    Main function to compile the C++ postprocess code.
+    """
+    try:
+        compile_postprocess()
+        logger.info("C++ postprocess compilation completed successfully.")
+    except Exception as e:
+        logger.error(f"An error occurred during C++ postprocess compilation: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()

@@ -38,9 +38,11 @@ class GStreamerDepthApp(GStreamerApp):
         self.app_callback = app_callback
         setproctitle.setproctitle(DEPTH_APP_TITLE)  # Set the process title
 
-        self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME)
+        # self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME)
+        self.hef_path = "/usr/local/hailo/resources/models/hailo8/depth_anything.hef"
         self.post_process_so = get_resource_path(DEPTH_PIPELINE, RESOURCES_SO_DIR_NAME, DEPTH_POSTPROCESS_SO_FILENAME)
-        self.post_function_name = DEPTH_POSTPROCESS_FUNCTION
+        # self.post_function_name = DEPTH_POSTPROCESS_FUNCTION
+        self.post_function_name = "filter_depth_anything"
         self.create_pipeline()
 
     def get_pipeline_string(self):

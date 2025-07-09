@@ -10,4 +10,5 @@
 __BEGIN_DECLS
 void filter(HailoROIPtr roi);
 void filter_scdepth(HailoROIPtr roi);
+void filter_depth_anything(HailoROIPtr roi);
 __END_DECLS
