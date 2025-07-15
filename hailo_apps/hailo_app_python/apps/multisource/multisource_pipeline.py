@@ -2,21 +2,18 @@
 # Standard library imports
 import setproctitle
 import json
-import time
 import os
 
 # Third-party imports
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
-import numpy as np
 
 # Local application-specific imports
 import hailo
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path, get_resource_path
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
-from hailo_apps.hailo_app_python.core.common.buffer_utils import get_caps_from_pad, get_numpy_from_buffer
-from hailo_apps.hailo_app_python.core.common.defines import MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
+from hailo_apps.hailo_app_python.core.common.defines import TAPPAS_STREAM_ID_TOOL_SO_FILENAME, MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import get_source_type, USER_CALLBACK_PIPELINE, TRACKER_PIPELINE, QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, DISPLAY_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class
 # endregion imports
@@ -24,10 +21,12 @@ from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerAp
 # User Gstreamer Application: This class inherits from the common.GStreamerApp class
 class GStreamerMultisourceApp(GStreamerApp):
     def __init__(self, app_callback, user_data, parser=None):
-        
+
         if parser == None:
             parser = get_default_parser()
         parser.add_argument("--sources", default='', help="The list of sources to use for the multisource pipeline, separated with comma e.g., /dev/video0,/dev/video1")
+        parser.add_argument("--width", default='640', help="Video width (resolution) for ALL the sources. Default is 640.")
+        parser.add_argument("--height", default='640', help="Video height (resolution) for ALL the sources. Default is 640.")
 
         super().__init__(parser, user_data)  # Call the parent class constructor
 
@@ -46,14 +45,13 @@ class GStreamerMultisourceApp(GStreamerApp):
         self.post_process_so = get_resource_path(SIMPLE_DETECTION_PIPELINE, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME)
         self.post_function_name = DETECTION_POSTPROCESS_FUNCTION
         self.video_sources_types = [(video_source, get_source_type(video_source)) for video_source in (self.options_menu.sources.split(',') if self.options_menu.sources else [self.video_source, self.video_source])]  # Default to 2 sources if none specified
-        self.num_sources = len(self.video_sources_types)  
+        self.num_sources = len(self.video_sources_types)
         self.algo_params = json.load(open(get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=MULTI_SOURCE_PARAMS_JSON_NAME), "r+"))
-        self.video_height = 640
-        self.video_width = 640
-        # self.frame_rate = 15
+        self.video_height = self.options_menu.height
+        self.video_width = self.options_menu.width
 
         self.app_callback = app_callback
-        self.generate_callbacks()        
+        self.generate_callbacks()
         self.create_pipeline()
         self.connect_src_callbacks()
 
@@ -62,10 +60,10 @@ class GStreamerMultisourceApp(GStreamerApp):
         router_string = ''
 
         tappas_post_process_dir = os.environ.get(TAPPAS_POSTPROC_PATH_KEY, '')
-        set_stream_id_so = os.path.join(tappas_post_process_dir, 'libstream_id_tool.so')
+        set_stream_id_so = os.path.join(tappas_post_process_dir, TAPPAS_STREAM_ID_TOOL_SO_FILENAME)
         for id in range(self.num_sources):
-            sources_string += SOURCE_PIPELINE(video_source=self.video_sources_types[id][0], 
-                                              video_width=self.video_width, video_height=self.video_height, 
+            sources_string += SOURCE_PIPELINE(video_source=self.video_sources_types[id][0],
+                                              video_width=self.video_width, video_height=self.video_height,
                                               frame_rate=self.frame_rate, sync=self.sync, name=f"source_{id}", no_webcam_compression=True)
             sources_string += f"! hailofilter name=set_src_{id} so-path={set_stream_id_so} config-path=f'src_{id}' "
             sources_string += f"! robin.sink_{id} "
@@ -94,7 +92,7 @@ class GStreamerMultisourceApp(GStreamerApp):
 
         # print(pipeline_string)
         return pipeline_string
-    
+
     def generate_callbacks(self):
         # Dynamically define callback functions per sources
         for id in range(self.num_sources):
@@ -111,7 +109,7 @@ class GStreamerMultisourceApp(GStreamerApp):
 
             # Attach the callback function to the instance
             setattr(self, f'src_{id}_callback', callback_function)
-    
+
     def connect_src_callbacks(self):
         for id in range(self.num_sources):
             identity = self.pipeline.get_by_name(f'src_{id}_callback')
@@ -135,7 +133,7 @@ def main():
     user_data = app_callback_class()
     app = GStreamerMultisourceApp(app_callback, user_data)
     app.run()
-    
+
 if __name__ == "__main__":
     print("Starting Hailo Multisource App...")
     main()

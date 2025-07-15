@@ -147,3 +147,33 @@ shared_library('tracker_update',
     install: true,
     install_dir: '/usr/local/hailo/resources/so',
 )
+################################################
+# REPVGG REID POST SOURCES
+################################################
+
+repvgg_reid_sources = [
+    'repvgg_reid.cpp'
+]
+shared_library('repvgg_reid_postprocess',
+    repvgg_reid_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)
+################################################
+# ALL DETECTIONS CROPPER POST SOURCES
+################################################
+
+all_detections_cropper_sources = [
+    'all_detections_cropper.cpp'
+]
+shared_library('all_detections_cropper_postprocess',
+    all_detections_cropper_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)

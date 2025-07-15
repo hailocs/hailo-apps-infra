@@ -190,6 +190,17 @@ void yolov5s_personface(HailoROIPtr roi)
     hailo_common::add_detections(roi, detections);
 }
 
+void yolov5s_personface_rgb(HailoROIPtr roi)
+{
+    if (!roi->has_tensors())
+    {
+        return;
+    }
+    auto post = HailoNMSDecode(roi->get_tensor("yolov5s_personface/yolov5_nms_postprocess"), yolo_personface);
+    auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();
+    hailo_common::add_detections(roi, detections);
+}
+
 void yolov5_no_persons(HailoROIPtr roi)
 {
     auto post = HailoNMSDecode(roi->get_tensor(DEFAULT_YOLOV5M_OUTPUT_LAYER), common::coco_eighty);
