@@ -80,7 +80,7 @@ def SOURCE_PIPELINE(video_source, video_width=640, video_height=640,
             source_element = (
                 f'v4l2src device={video_source} name={name} ! '
                 f'video/x-raw, width=640, height=480 ! '
-                'videoflip name=videoflip video-direction=horiz ! '
+                f'videoflip name=videoflip_{name} video-direction=horiz ! '
             )
         else:
             # Use compressed format for webcam
@@ -89,7 +89,7 @@ def SOURCE_PIPELINE(video_source, video_width=640, video_height=640,
                 f'v4l2src device={video_source} name={name} ! image/jpeg, framerate=30/1, width={width}, height={height} ! '
                 f'{QUEUE(name=f"{name}_queue_decode")} ! '
                 f'decodebin name={name}_decodebin ! '
-                f'videoflip name=videoflip video-direction=horiz ! '
+                f'videoflip name=videoflip_{name} video-direction=horiz ! '
             )
     elif source_type == 'rpi':
         source_element = (
