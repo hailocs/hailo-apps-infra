@@ -177,3 +177,18 @@ shared_library('all_detections_cropper_postprocess',
     install: true,
     install_dir: '/usr/local/hailo/resources/so',
 )
+################################################
+# TILING MOBILENET SSD POST SOURCES
+################################################
+
+mobilenet_ssd_sources = [
+    'mobilenet_ssd.cpp'
+]
+shared_library('mobilenet_ssd_postprocess',
+    mobilenet_ssd_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)
