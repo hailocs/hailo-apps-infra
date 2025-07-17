@@ -65,7 +65,7 @@ class GStreamerMultisourceApp(GStreamerApp):
             sources_string += SOURCE_PIPELINE(video_source=self.video_sources_types[id][0],
                                               video_width=self.video_width, video_height=self.video_height,
                                               frame_rate=self.frame_rate, sync=self.sync, name=f"source_{id}", no_webcam_compression=True)
-            sources_string += f"! hailofilter name=set_src_{id} so-path={set_stream_id_so} config-path=f'src_{id}' "
+            sources_string += f"! hailofilter name=set_src_{id} so-path={set_stream_id_so} config-path=src_{id} "
             sources_string += f"! robin.sink_{id} "
             router_string += f"router.src_{id} ! {USER_CALLBACK_PIPELINE(name=f'src_{id}_callback')} ! {QUEUE(name=f'callback_q_{id}')} ! {DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps, name=f'hailo_display_{id}')} "
 
@@ -83,7 +83,6 @@ class GStreamerMultisourceApp(GStreamerApp):
             batch_size=self.batch_size,
             additional_params=self.thresholds_str)
 
-        # inference_string = f"hailoroundrobin mode=1 name=robin ! {detection_pipeline} ! hailostreamrouter name=router "
         inference_string = f"hailoroundrobin mode=1 name=robin ! {detection_pipeline} ! {TRACKER_PIPELINE(class_id=-1)} ! {USER_CALLBACK_PIPELINE()} ! {QUEUE(name='call_q')} ! hailostreamrouter name=router "
         for id in range(self.num_sources):
             inference_string += f"src_{id}::input-streams=\"<sink_{id}>\" "

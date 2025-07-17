@@ -212,6 +212,10 @@ FACE_RECON_SAMPLES_DIR_NAME = "samples"
 FACE_RECON_LOCAL_SAMPLES_DIR_NAME = "faces"
 FACE_DETECTION_JSON_NAME = "scrfd.json"
 FACE_ALGO_PARAMS_JSON_NAME = "face_recon_algo_params.json"
+VMS_CROPPER_POSTPROCESS_FUNCTION = "face_recognition"
+ARCFACE_MOBILEFACENET_POSTPROCESS_FUNCTION = "filter"
+SCRFD_8_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
+SCRFD_8L_POSTPROCESS_FUNCTION = "scrfd_2_5g_letterbox"
 
 # Multisource pipeline defaults
 MULTI_SOURCE_APP_TITLE = "Hailo Multisource App"
@@ -220,7 +224,7 @@ TAPPAS_STREAM_ID_TOOL_SO_FILENAME = 'libstream_id_tool.so'
 
 # REID Multisource pipeline defaults
 REID_MULTISOURCE_APP_TITLE = "Hailo REID Multisource App"
-MULTI_SOURCE_DIR_NAME = "multi_source"
+MULTI_SOURCE_DIR_NAME = "reid_multisource"
 MULTI_SOURCE_DATABASE_DIR_NAME = "database"
 REID_POSTPROCESS_SO_FILENAME = "librepvgg_reid_postprocess.so"
 ALL_DETECTIONS_CROPPER_POSTPROCESS_SO_FILENAME = "liball_detections_cropper_postprocess.so"
@@ -232,6 +236,11 @@ REID_CLASSIFICATION_TYPE = 'reid'
 
 # RTSP pipeline defaults
 RTSP_APP_TITLE = "Hailo RTSP App"
+
+# TILING pipeline defaults
+TILING_APP_TITLE = "Hailo Tiling App"
+TILING_POSTPROCESS_SO_FILENAME = "libmobilenet_ssd_postprocess.so"
+TILING_POSTPROCESS_FUNCTION = "mobilenet_ssd"
 
 # Installation & subprocess defaults
 PIP_SHOW_TIMEOUT = 5  # seconds

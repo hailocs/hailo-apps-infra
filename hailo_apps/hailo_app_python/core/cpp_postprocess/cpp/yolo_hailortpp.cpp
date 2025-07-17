@@ -198,6 +198,17 @@ void yolov5s_personface_rgb(HailoROIPtr roi)
     }
     auto post = HailoNMSDecode(roi->get_tensor("yolov5s_personface/yolov5_nms_postprocess"), yolo_personface);
     auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();
+    for (auto it = detections.begin(); it != detections.end();)
+    {
+        if (it->get_label() == "face")
+        {
+            it = detections.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
     hailo_common::add_detections(roi, detections);
 }
 
@@ -207,6 +218,7 @@ void yolov5_no_persons(HailoROIPtr roi)
     auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();
     for (auto it = detections.begin(); it != detections.end();)
     {
+        // TODO
         if (it->get_label() == "person")
         {
             it = detections.erase(it);
