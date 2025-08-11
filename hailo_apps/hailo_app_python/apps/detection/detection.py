@@ -12,6 +12,10 @@ import hailo
 from hailo_apps.hailo_app_python.core.common.buffer_utils import get_caps_from_pad, get_numpy_from_buffer
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
 from hailo_apps.hailo_app_python.apps.detection.detection_pipeline import GStreamerDetectionApp
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+hailo_logger = get_logger(__name__)
 # endregion imports
 
 # -----------------------------------------------------------------------------------------------
@@ -24,6 +28,7 @@ class user_app_callback_class(app_callback_class):
         self.new_variable = 42  # New variable example
 
     def new_function(self):  # New function example
+
         return "The meaning of life is: "
 
 # -----------------------------------------------------------------------------------------------
@@ -36,14 +41,18 @@ def app_callback(pad, info, user_data):
     buffer = info.get_buffer()
     # Check if the buffer is valid
     if buffer is None:
+        hailo_logger.warning("Received None buffer | frame=%s", user_data.get_count())
         return Gst.PadProbeReturn.OK
 
     # Using the user_data to count the number of frames
     user_data.increment()
+    frame_idx = user_data.get_count()
     string_to_print = f"Frame count: {user_data.get_count()}\n"
 
     # Get the caps from the pad
     format, width, height = get_caps_from_pad(pad)
+    hailo_logger.debug("Frame=%s | caps fmt=%s %sx%s", frame_idx, format, width, height)
+
 
     # If the user_data.use_frame is set to True, we can get the video frame from the buffer
     frame = None
@@ -68,6 +77,10 @@ def app_callback(pad, info, user_data):
             if len(track) == 1:
                 track_id = track[0].get_id()
             string_to_print += (f"Detection: ID: {track_id} Label: {label} Confidence: {confidence:.2f}\n")
+            hailo_logger.debug(
+                    "Frame=%s | Detection person | id=%s conf=%.2f bbox=(x=%.1f,y=%.1f,w=%.1f,h=%.1f)",
+                    frame_idx, track_id, confidence, bbox.xmin(), bbox.ymin(), bbox.width(), bbox.height()
+            )
             detection_count += 1
     if user_data.use_frame:
         # Note: using imshow will not work here, as the callback function is not running in the main thread
@@ -81,10 +94,12 @@ def app_callback(pad, info, user_data):
         user_data.set_frame(frame)
 
     print(string_to_print)
+    hailo_logger.info(string_to_print.strip())
     return Gst.PadProbeReturn.OK
 
 if __name__ == "__main__":
     # Create an instance of the user app callback class
+    hailo_logger.info("Starting Hailo Detection App...")
     user_data = user_app_callback_class()
     app = GStreamerDetectionApp(app_callback, user_data)
     app.run()

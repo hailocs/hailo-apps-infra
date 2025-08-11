@@ -1,5 +1,6 @@
 # region imports
 # Standard library imports
+from pathlib import Path
 import setproctitle
 
 # Local application-specific imports
@@ -8,6 +9,11 @@ from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get
 from hailo_apps.hailo_app_python.core.common.defines import DETECTION_APP_TITLE, DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+hailo_logger = get_logger(__name__)
+
 # endregion imports
 
 # -----------------------------------------------------------------------------------------------
@@ -24,9 +30,19 @@ class GStreamerDetectionApp(GStreamerApp):
             default=None,
             help="Path to costume labels JSON file",
         )
+        hailo_logger.info("Initializing GStreamer Detection App...")
 
         # Call the parent class constructor
         super().__init__(parser, user_data)
+
+        hailo_logger.debug(
+            "Parent GStreamerApp initialized | arch=%s | input=%s | fps=%s | sync=%s | show_fps=%s",
+            getattr(self.options_menu, "arch", None),
+            getattr(self, "video_source", None),
+            getattr(self, "frame_rate", None),
+            getattr(self, "sync", None),
+            getattr(self, "show_fps", None),
+        )
         # Additional initialization code can be added here
         # Set Hailo parameters these parameters should be set based on the model used
         self.batch_size = 2
@@ -37,12 +53,15 @@ class GStreamerDetectionApp(GStreamerApp):
         # Determine the architecture if not specified
         if self.options_menu.arch is None:
             detected_arch = detect_hailo_arch()
+            hailo_logger.debug("Auto-detected Hailo arch: %s", detected_arch)
             if detected_arch is None:
+                hailo_logger.error("Could not auto-detect Hailo architecture.")
                 raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
             self.arch = detected_arch
             print(f"Auto-detected Hailo architecture: {self.arch}")
         else:
             self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
 
         if self.options_menu.hef_path is not None:
@@ -62,6 +81,21 @@ class GStreamerDetectionApp(GStreamerApp):
         # User-defined label JSON file
         self.labels_json = self.options_menu.labels_json
 
+        hailo_logger.info(
+            "Resources | hef=%s | post_so=%s | post_fn=%s | labels_json=%s",
+            self.hef_path,
+            self.post_process_so,
+            self.post_function_name,
+            self.labels_json,
+        )
+
+        # Validate resource paths
+        if self.hef_path is None or not Path(self.hef_path).exists():
+            hailo_logger.error("HEF path is invalid or missing: %s", self.hef_path)
+        if self.post_process_so is None or not Path(self.post_process_so).exists():
+            hailo_logger.error("Post-process .so path is invalid or missing: %s", self.post_process_so)
+
+
         self.app_callback = app_callback
 
         self.thresholds_str = (
@@ -69,11 +103,14 @@ class GStreamerDetectionApp(GStreamerApp):
             f"nms-iou-threshold={nms_iou_threshold} "
             f"output-format-type=HAILO_FORMAT_TYPE_FLOAT32"
         )
+        hailo_logger.debug("Postprocess thresholds: %s", self.thresholds_str)
 
         # Set the process title
         setproctitle.setproctitle(DETECTION_APP_TITLE)
+        hailo_logger.debug("Process title set to %s", DETECTION_APP_TITLE)
 
         self.create_pipeline()
+        hailo_logger.debug("Pipeline created")
 
     def get_pipeline_string(self):
         source_pipeline = SOURCE_PIPELINE(video_source=self.video_source,
@@ -98,17 +135,17 @@ class GStreamerDetectionApp(GStreamerApp):
             f'{user_callback_pipeline} ! '
             f'{display_pipeline}'
         )
-        print(pipeline_string)
+        hailo_logger.debug("Pipeline string: %s", pipeline_string)
         return pipeline_string
 
 def main():
     # Create an instance of the user app callback class
+    hailo_logger.info("Starting Hailo Detection App...")
     user_data = app_callback_class()
     app_callback = dummy_callback
     app = GStreamerDetectionApp(app_callback, user_data)
     app.run()
     
 if __name__ == "__main__":
-    print("Starting Hailo Detection App...")
     main()
  

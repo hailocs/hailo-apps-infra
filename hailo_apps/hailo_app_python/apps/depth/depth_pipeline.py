@@ -14,6 +14,18 @@ from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines impor
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.hailo_app_python.core.common.defines import DEPTH_POSTPROCESS_FUNCTION, RESOURCES_SO_DIR_NAME, DEPTH_POSTPROCESS_SO_FILENAME, RESOURCES_MODELS_DIR_NAME, DEPTH_PIPELINE, DEPTH_APP_TITLE
+
+# Logger 
+# Logging (shared, one logger per run)
+from hailo_apps.hailo_app_python.core.common.hailo_logger import (
+    init_logging,
+    add_logging_cli_args,
+    level_from_args,
+    get_logger,
+)
+
+hailo_logger = get_logger(__name__)  # same run_id everywhere
+
 # endregion imports
 
 
@@ -23,26 +35,54 @@ class GStreamerDepthApp(GStreamerApp):
 
         if parser == None:
             parser = get_default_parser()
+            add_logging_cli_args(parser)
+
+        hailo_logger.info("Initializing GStreamer Depth App...")
 
         super().__init__(parser, user_data)  # Call the parent class constructor
+
+        hailo_logger.debug("Parent GStreamerApp initialized, options parsed: arch=%s, input=%s, fps=%s, sync=%s, show_fps=%s",
+            getattr(self.options_menu, "arch", None),
+            getattr(self, "video_source", None),
+            getattr(self, "frame_rate", None),
+            getattr(self, "sync", None),
+            getattr(self, "show_fps", None))
+
 
         # Determine the architecture if not specified
         if self.options_menu.arch is None:
             detected_arch = detect_hailo_arch()
+            hailo_logger.debug("Auto-detected Hailo arch: %s", detected_arch)
             if detected_arch is None:
+                hailo_logger.error('Could not auto-detect Hailo architecture.')
                 raise ValueError('Could not auto-detect Hailo architecture. Please specify --arch manually.')
             self.arch = detected_arch
         else:
             self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
         self.app_callback = app_callback
         setproctitle.setproctitle(DEPTH_APP_TITLE)  # Set the process title
+        hailo_logger.debug("Process title set to %s", DEPTH_APP_TITLE)
 
         self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME)
         self.post_process_so = get_resource_path(DEPTH_PIPELINE, RESOURCES_SO_DIR_NAME, DEPTH_POSTPROCESS_SO_FILENAME)
         self.post_function_name = DEPTH_POSTPROCESS_FUNCTION
-        self.create_pipeline()
+        hailo_logger.debug("HEF path: %s, Post-process SO: %s, Post-process function: %s",
+                 self.hef_path, self.post_process_so, self.post_function_name)
+        
+        hailo_logger.info("Resources resolved | hef=%s | post_so=%s | post_fn=%s",
+                 self.hef_path, self.post_process_so, self.post_function_name)
 
+        # Validate resource paths
+        if self.hef_path is None or not Path(self.hef_path).exists():
+            hailo_logger.error("HEF path is invalid or missing: %s", self.hef_path)
+        if self.post_process_so is None or not Path(self.post_process_so).exists():
+            hailo_logger.error("Post-process .so path is invalid or missing: %s", self.post_process_so)
+
+        self.create_pipeline()
+        hailo_logger.debug("Pipeline created")
+    
     def get_pipeline_string(self):
         source_pipeline = SOURCE_PIPELINE(video_source=self.video_source,
                                           video_width=self.video_width, video_height=self.video_height,
@@ -56,12 +96,14 @@ class GStreamerDepthApp(GStreamerApp):
         user_callback_pipeline = USER_CALLBACK_PIPELINE()
         display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
 
-        return (
+        pipeline_str = (
             f'{source_pipeline} ! '
             f'{depth_pipeline_wrapper} ! '
             f'{user_callback_pipeline} ! '
             f'{display_pipeline}'
         )
+        hailo_logger.debug("Pipeline string created: %s", pipeline_str)
+        return pipeline_str
 
 def main():
     # Create an instance of the user app callback class

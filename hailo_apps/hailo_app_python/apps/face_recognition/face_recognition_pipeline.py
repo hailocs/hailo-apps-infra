@@ -52,6 +52,12 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME
 )
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, CROPPER_PIPELINE, UI_APPSINK_PIPELINE
+
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+hailo_logger = get_logger(__name__)
+
 # endregion
 
 class GStreamerFaceRecognitionApp(GStreamerApp):
