@@ -3,20 +3,29 @@
 
 # Third-party imports
 import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst
+
+gi.require_version("Gst", "1.0")
 import cv2
 
 # Local application-specific imports
 import hailo
-from hailo_apps.hailo_app_python.core.common.buffer_utils import get_caps_from_pad, get_numpy_from_buffer
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
-from hailo_apps.hailo_app_python.apps.pose_estimation.pose_estimation_pipeline import GStreamerPoseEstimationApp
+from gi.repository import Gst
+
+from hailo_apps.hailo_app_python.apps.pose_estimation.pose_estimation_pipeline import (
+    GStreamerPoseEstimationApp,
+)
+from hailo_apps.hailo_app_python.core.common.buffer_utils import (
+    get_caps_from_pad,
+    get_numpy_from_buffer,
+)
 
 # Logger
 from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
+
 hailo_logger = get_logger(__name__)
 # endregion imports
+
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
@@ -25,6 +34,7 @@ class user_app_callback_class(app_callback_class):
     def __init__(self):
         super().__init__()
         hailo_logger.debug("Initialized user_app_callback_class.")
+
 
 # -----------------------------------------------------------------------------------------------
 # User-defined callback function
@@ -68,13 +78,15 @@ def app_callback(pad, info, user_data):
                 track_id = track[0].get_id()
             hailo_logger.debug("Person track_id=%d", track_id)
 
-            string_to_print += (f"Detection: ID: {track_id} Label: {label} Confidence: {confidence:.2f}\n")
+            string_to_print += (
+                f"Detection: ID: {track_id} Label: {label} Confidence: {confidence:.2f}\n"
+            )
 
             landmarks = detection.get_objects_typed(hailo.HAILO_LANDMARKS)
             hailo_logger.debug("Number of landmarks: %d", len(landmarks))
             if landmarks:
                 points = landmarks[0].get_points()
-                for eye in ['left_eye', 'right_eye']:
+                for eye in ["left_eye", "right_eye"]:
                     keypoint_index = keypoints[eye]
                     point = points[keypoint_index]
                     x = int((point.x() * bbox.width() + bbox.xmin()) * width)
@@ -93,14 +105,29 @@ def app_callback(pad, info, user_data):
     hailo_logger.debug("Frame log:\n%s", string_to_print)
     return Gst.PadProbeReturn.OK
 
+
 def get_keypoints():
     hailo_logger.debug("Fetching COCO keypoints mapping.")
     return {
-        'nose': 0, 'left_eye': 1, 'right_eye': 2, 'left_ear': 3, 'right_ear': 4,
-        'left_shoulder': 5, 'right_shoulder': 6, 'left_elbow': 7, 'right_elbow': 8,
-        'left_wrist': 9, 'right_wrist': 10, 'left_hip': 11, 'right_hip': 12,
-        'left_knee': 13, 'right_knee': 14, 'left_ankle': 15, 'right_ankle': 16,
+        "nose": 0,
+        "left_eye": 1,
+        "right_eye": 2,
+        "left_ear": 3,
+        "right_ear": 4,
+        "left_shoulder": 5,
+        "right_shoulder": 6,
+        "left_elbow": 7,
+        "right_elbow": 8,
+        "left_wrist": 9,
+        "right_wrist": 10,
+        "left_hip": 11,
+        "right_hip": 12,
+        "left_knee": 13,
+        "right_knee": 14,
+        "left_ankle": 15,
+        "right_ankle": 16,
     }
+
 
 if __name__ == "__main__":
     hailo_logger.info("Starting Pose Estimation App...")

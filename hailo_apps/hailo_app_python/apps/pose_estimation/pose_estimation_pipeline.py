@@ -1,23 +1,44 @@
 # region imports
 # Standard library imports
 import os
-import setproctitle
-from pathlib import Path
-import sys
 
-# Local application-specific imports
-from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
+import setproctitle
+
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path
-from hailo_apps.hailo_app_python.core.common.defines import POSE_ESTIMATION_APP_TITLE, POSE_ESTIMATION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, POSE_ESTIMATION_POSTPROCESS_SO_FILENAME, POSE_ESTIMATION_POSTPROCESS_FUNCTION, HAILO_ARCH_KEY
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
+from hailo_apps.hailo_app_python.core.common.defines import (
+    HAILO_ARCH_KEY,
+    POSE_ESTIMATION_APP_TITLE,
+    POSE_ESTIMATION_PIPELINE,
+    POSE_ESTIMATION_POSTPROCESS_FUNCTION,
+    POSE_ESTIMATION_POSTPROCESS_SO_FILENAME,
+    RESOURCES_MODELS_DIR_NAME,
+    RESOURCES_SO_DIR_NAME,
+)
 
 # Logger
 from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
+# Local application-specific imports
+from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import (
+    GStreamerApp,
+    app_callback_class,
+    dummy_callback,
+)
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import (
+    DISPLAY_PIPELINE,
+    INFERENCE_PIPELINE,
+    INFERENCE_PIPELINE_WRAPPER,
+    SOURCE_PIPELINE,
+    TRACKER_PIPELINE,
+    USER_CALLBACK_PIPELINE,
+)
+
 hailo_logger = get_logger(__name__)
 # endregion imports
 
-#-----------------------------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------------------------
 # User Gstreamer Application
 # -----------------------------------------------------------------------------------------------
 class GStreamerPoseEstimationApp(GStreamerApp):
@@ -34,14 +55,21 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         self.batch_size = 2
         self.video_width = 1280
         self.video_height = 720
-        hailo_logger.debug("Video params set: %dx%d, batch_size=%d", self.video_width, self.video_height, self.batch_size)
+        hailo_logger.debug(
+            "Video params set: %dx%d, batch_size=%d",
+            self.video_width,
+            self.video_height,
+            self.batch_size,
+        )
 
         # Detect architecture if not specified
         if self.options_menu.arch is None:
             detected_arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
             if detected_arch is None:
                 hailo_logger.error("Could not auto-detect Hailo architecture.")
-                raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
+                raise ValueError(
+                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
+                )
             self.arch = detected_arch
             hailo_logger.info("Auto-detected Hailo architecture: %s", self.arch)
         else:
@@ -60,9 +88,13 @@ class GStreamerPoseEstimationApp(GStreamerApp):
             hailo_logger.debug("Using default HEF path: %s", self.hef_path)
 
         self.app_callback = app_callback
-        self.post_process_so = get_resource_path(POSE_ESTIMATION_PIPELINE, RESOURCES_SO_DIR_NAME, POSE_ESTIMATION_POSTPROCESS_SO_FILENAME)
+        self.post_process_so = get_resource_path(
+            POSE_ESTIMATION_PIPELINE, RESOURCES_SO_DIR_NAME, POSE_ESTIMATION_POSTPROCESS_SO_FILENAME
+        )
         self.post_process_function = POSE_ESTIMATION_POSTPROCESS_FUNCTION
-        hailo_logger.debug("Post-process SO: %s, Function: %s", self.post_process_so, self.post_process_function)
+        hailo_logger.debug(
+            "Post-process SO: %s, Function: %s", self.post_process_so, self.post_process_function
+        )
 
         setproctitle.setproctitle(POSE_ESTIMATION_APP_TITLE)
         hailo_logger.debug("Process title set: %s", POSE_ESTIMATION_APP_TITLE)
@@ -72,36 +104,44 @@ class GStreamerPoseEstimationApp(GStreamerApp):
 
     def get_pipeline_string(self):
         hailo_logger.debug("Building pipeline string...")
-        source_pipeline = SOURCE_PIPELINE(video_source=self.video_source,
-                                          video_width=self.video_width, video_height=self.video_height,
-                                          frame_rate=self.frame_rate, sync=self.sync)
+        source_pipeline = SOURCE_PIPELINE(
+            video_source=self.video_source,
+            video_width=self.video_width,
+            video_height=self.video_height,
+            frame_rate=self.frame_rate,
+            sync=self.sync,
+        )
         infer_pipeline = INFERENCE_PIPELINE(
             hef_path=self.hef_path,
             post_process_so=self.post_process_so,
             post_function_name=self.post_process_function,
-            batch_size=self.batch_size
+            batch_size=self.batch_size,
         )
         infer_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(infer_pipeline)
         tracker_pipeline = TRACKER_PIPELINE(class_id=0)
         user_callback_pipeline = USER_CALLBACK_PIPELINE()
-        display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
+        display_pipeline = DISPLAY_PIPELINE(
+            video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps
+        )
 
         pipeline_string = (
-            f'{source_pipeline} ! '
-            f'{infer_pipeline_wrapper} ! '
-            f'{tracker_pipeline} ! '
-            f'{user_callback_pipeline} ! '
-            f'{display_pipeline}'
+            f"{source_pipeline} ! "
+            f"{infer_pipeline_wrapper} ! "
+            f"{tracker_pipeline} ! "
+            f"{user_callback_pipeline} ! "
+            f"{display_pipeline}"
         )
         hailo_logger.debug("Pipeline string: %s", pipeline_string)
         print(pipeline_string)
         return pipeline_string
+
 
 def main():
     hailo_logger.info("Starting Pose Estimation App main()...")
     user_data = app_callback_class()
     app = GStreamerPoseEstimationApp(dummy_callback, user_data)
     app.run()
+
 
 if __name__ == "__main__":
     hailo_logger.info("Launching Pose Estimation App...")

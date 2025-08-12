@@ -1,14 +1,16 @@
 import os
+import signal
 import subprocess
 import time
-import signal
 
 from .defines import UDEV_CMD
 from .hailo_logger import get_logger
+
 hailo_logger = get_logger(__name__)
 
 # if udevadm is not installed, install it using the following command:
 # sudo apt-get install udev
+
 
 # Checks if a Raspberry Pi camera is connected and responsive.
 def is_rpi_camera_available():
@@ -16,8 +18,7 @@ def is_rpi_camera_available():
     hailo_logger.debug("Checking if Raspberry Pi camera is available...")
     try:
         process = subprocess.Popen(
-            ['rpicam-hello', '-t', '0'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ["rpicam-hello", "-t", "0"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         hailo_logger.debug("Started rpicam-hello process.")
         time.sleep(5)
@@ -36,13 +37,14 @@ def is_rpi_camera_available():
         hailo_logger.error(f"Error checking Raspberry Pi camera: {e}")
         return False
 
+
 # Checks if a USB camera is connected and responsive.
 def get_usb_video_devices():
-    """
-    Get a list of video devices that are connected via USB and have video capture capability.
-    """
+    """Get a list of video devices that are connected via USB and have video capture capability."""
     hailo_logger.debug("Scanning /dev for video devices...")
-    video_devices = [f'/dev/{device}' for device in os.listdir('/dev') if device.startswith('video')]
+    video_devices = [
+        f"/dev/{device}" for device in os.listdir("/dev") if device.startswith("video")
+    ]
     usb_video_devices = []
     hailo_logger.debug(f"Found video devices: {video_devices}")
 
@@ -52,8 +54,8 @@ def get_usb_video_devices():
             # Use udevadm to get detailed information about the device
             udevadm_cmd = [UDEV_CMD, "info", "--query=all", "--name=" + device]
             hailo_logger.debug(f"Running command: {' '.join(udevadm_cmd)}")
-            result = subprocess.run(udevadm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            output = result.stdout.decode('utf-8')
+            result = subprocess.run(udevadm_cmd, check=False, capture_output=True)
+            output = result.stdout.decode("utf-8")
             hailo_logger.debug(f"udevadm output for {device}: {output}")
 
             # Check if the device is connected via USB and has video capture capabilities
@@ -66,6 +68,7 @@ def get_usb_video_devices():
     hailo_logger.debug(f"USB video devices found: {usb_video_devices}")
     return usb_video_devices
 
+
 def main():
     hailo_logger.debug("Running main() to check for USB cameras.")
     usb_video_devices = get_usb_video_devices()
@@ -76,6 +79,7 @@ def main():
     else:
         hailo_logger.info("No available USB cameras found.")
         print("No available USB cameras found.")
+
 
 if __name__ == "__main__":
     main()

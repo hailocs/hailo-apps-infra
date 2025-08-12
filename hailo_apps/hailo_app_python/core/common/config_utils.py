@@ -1,43 +1,43 @@
-"""
-Configuration module: loads defaults, file config, CLI overrides, and merges them.
-"""
+"""Configuration module: loads defaults, file config, CLI overrides, and merges them."""
+
 import sys
 from pathlib import Path
+
 import yaml
 
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
 from .defines import (
-    # Config keys
-    HAILORT_VERSION_KEY,
-    TAPPAS_VERSION_KEY,
-    MODEL_ZOO_VERSION_KEY,
-    HOST_ARCH_KEY,
+    DEFAULT_RESOURCES_SYMLINK_PATH,
+    HAILO_ARCH_DEFAULT,
     HAILO_ARCH_KEY,
-    SERVER_URL_KEY,
-    TAPPAS_VARIANT_KEY,
-    RESOURCES_PATH_KEY,
-    VIRTUAL_ENV_NAME_KEY,
     # Default values
     HAILORT_VERSION_DEFAULT,
-    TAPPAS_VERSION_DEFAULT,
-    MODEL_ZOO_VERSION_DEFAULT,
+    # Config keys
+    HAILORT_VERSION_KEY,
     HOST_ARCH_DEFAULT,
-    HAILO_ARCH_DEFAULT,
+    HOST_ARCH_KEY,
+    MODEL_ZOO_VERSION_DEFAULT,
+    MODEL_ZOO_VERSION_KEY,
+    RESOURCES_PATH_KEY,
     SERVER_URL_DEFAULT,
+    SERVER_URL_KEY,
     TAPPAS_VARIANT_DEFAULT,
-    DEFAULT_RESOURCES_SYMLINK_PATH,
-    VIRTUAL_ENV_NAME_DEFAULT,
-    STORAGE_PATH_DEFAULT,
+    TAPPAS_VARIANT_KEY,
+    TAPPAS_VERSION_DEFAULT,
+    TAPPAS_VERSION_KEY,
+    VALID_HAILO_ARCH,
     # Valid choices
     VALID_HAILORT_VERSION,
-    VALID_TAPPAS_VERSION,
-    VALID_MODEL_ZOO_VERSION,
     VALID_HOST_ARCH,
-    VALID_HAILO_ARCH,
+    VALID_MODEL_ZOO_VERSION,
     VALID_SERVER_URL,
     VALID_TAPPAS_VARIANT,
+    VALID_TAPPAS_VERSION,
+    VIRTUAL_ENV_NAME_DEFAULT,
+    VIRTUAL_ENV_NAME_KEY,
 )
 
-from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
 hailo_logger = get_logger(__name__)
 
 
@@ -90,16 +90,17 @@ def validate_config(config: dict) -> bool:
     for key, valid_choices in valid_map.items():
         val = config.get(key)
         if val not in valid_choices:
-            hailo_logger.warning(f"Invalid value for {key}: '{val}'. Valid options: {valid_choices}")
+            hailo_logger.warning(
+                f"Invalid value for {key}: '{val}'. Valid options: {valid_choices}"
+            )
             valid_config = False
             print(f"Invalid value '{val}'. Valid options: {valid_choices}")
     hailo_logger.debug(f"Configuration validation result: {valid_config}")
     return valid_config
 
 
-def load_and_validate_config(config_path: str = None) -> dict:
-    """
-    Load and validate the configuration file.
+def load_and_validate_config(config_path: str | None = None) -> dict:
+    """Load and validate the configuration file.
     Returns the loaded configuration as a dictionary.
     """
     hailo_logger.debug(f"load_and_validate_config called with path: {config_path}")

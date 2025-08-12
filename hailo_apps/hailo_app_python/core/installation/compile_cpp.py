@@ -1,8 +1,9 @@
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
 hailo_logger = get_logger(__name__)
 
 
@@ -26,11 +27,7 @@ def compile_postprocess():
     script = pp_dir / "compile_postprocess.sh"
     hailo_logger.debug(f"Running compile script: {script}")
 
-    ret = subprocess.run(
-        ["bash", str(script), "release"],
-        cwd=str(pp_dir),
-        check=False
-    )
+    ret = subprocess.run(["bash", str(script), "release"], cwd=str(pp_dir), check=False)
     if ret.returncode:
         hailo_logger.error(f"C++ postprocess build failed (exit {ret.returncode})")
         sys.exit(ret.returncode)

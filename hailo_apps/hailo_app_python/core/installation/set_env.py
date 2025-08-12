@@ -1,21 +1,25 @@
+import argparse
 import os
 import sys
-import argparse
 from pathlib import Path
 
 from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
 hailo_logger = get_logger(__name__)
 
-from hailo_apps.hailo_app_python.core.common.installation_utils import (
-    detect_system_pkg_version, detect_host_arch,
-    detect_hailo_arch, auto_detect_tappas_variant,
-    auto_detect_tappas_version, auto_detect_tappas_postproc_dir
-)
 from hailo_apps.hailo_app_python.core.common.config_utils import load_and_validate_config
 from hailo_apps.hailo_app_python.core.common.defines import *
+from hailo_apps.hailo_app_python.core.common.installation_utils import (
+    auto_detect_tappas_postproc_dir,
+    auto_detect_tappas_variant,
+    auto_detect_tappas_version,
+    detect_hailo_arch,
+    detect_host_arch,
+    detect_system_pkg_version,
+)
 
 
-def handle_dot_env(env_path: Path = None) -> Path:
+def handle_dot_env(env_path: Path | None = None) -> Path:
     hailo_logger.debug(f"handle_dot_env called with env_path={env_path}")
     if env_path is None:
         env_path = REPO_ROOT / DEFAULT_DOTENV_PATH
@@ -42,7 +46,7 @@ def _persist_env_vars(env_vars: dict, env_path: Path) -> None:
             hailo_logger.error(f"Failed to fix .env perms: {e}")
             print(f"❌ Failed to fix .env perms: {e}")
             sys.exit(1)
-    with open(env_path, 'w') as f:
+    with open(env_path, "w") as f:
         for key, value in env_vars.items():
             if value is not None:
                 f.write(f"{key}={value}\n")
@@ -50,7 +54,7 @@ def _persist_env_vars(env_vars: dict, env_path: Path) -> None:
     print(f"✅ Persisted environment variables to {env_path}")
 
 
-def set_environment_vars(config, env_path: Path = None) -> None:
+def set_environment_vars(config, env_path: Path | None = None) -> None:
     hailo_logger.debug(f"set_environment_vars called with env_path={env_path}")
     if env_path is None:
         env_path = handle_dot_env()
@@ -101,7 +105,7 @@ def set_environment_vars(config, env_path: Path = None) -> None:
         TAPPAS_VERSION_KEY: tappas_version,
         VIRTUAL_ENV_NAME_KEY: virtual_env_name,
         SERVER_URL_KEY: server_url,
-        TAPPAS_VARIANT_KEY: tappas_variant
+        TAPPAS_VARIANT_KEY: tappas_variant,
     }
 
     hailo_logger.debug(f"Final environment variables: {env_vars}")
@@ -111,9 +115,15 @@ def set_environment_vars(config, env_path: Path = None) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Set environment variables for Hailo installation.")
-    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to the config file")
-    parser.add_argument("--env-path", type=str, default=DEFAULT_DOTENV_PATH, help="Path to the .env file")
+    parser = argparse.ArgumentParser(
+        description="Set environment variables for Hailo installation."
+    )
+    parser.add_argument(
+        "--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to the config file"
+    )
+    parser.add_argument(
+        "--env-path", type=str, default=DEFAULT_DOTENV_PATH, help="Path to the .env file"
+    )
 
     args = parser.parse_args()
     hailo_logger.debug(f"CLI arguments: {args}")

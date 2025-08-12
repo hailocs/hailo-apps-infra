@@ -1,37 +1,38 @@
 import argparse
-from pathlib import Path
-import sys
-import os
-import shutil
-import pwd
 import grp
+import os
+import pwd
+import shutil
 import subprocess
+from pathlib import Path
 
 from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
 hailo_logger = get_logger(__name__)
 
 
-from hailo_apps.hailo_app_python.core.common.defines import (
-    RESOURCES_ROOT_PATH_DEFAULT,
-    RESOURCES_DIRS_MAP,
-    RESOURCES_PATH_KEY,
-    RESOURCES_PATH_DEFAULT,
-    REPO_ROOT,
-    RESOURCES_GROUP_DEFAULT,
-    DEFAULT_CONFIG_PATH,
-    DEFAULT_DOTENV_PATH,
-)
-from hailo_apps.hailo_app_python.core.installation.download_resources import download_resources
-from hailo_apps.hailo_app_python.core.installation.compile_cpp import compile_postprocess
-from hailo_apps.hailo_app_python.core.common.installation_utils import create_symlink
 from hailo_apps.hailo_app_python.core.common.config_utils import load_and_validate_config
 from hailo_apps.hailo_app_python.core.common.core import load_environment
-from hailo_apps.hailo_app_python.core.installation.set_env import handle_dot_env, set_environment_vars
+from hailo_apps.hailo_app_python.core.common.defines import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_DOTENV_PATH,
+    RESOURCES_DIRS_MAP,
+    RESOURCES_GROUP_DEFAULT,
+    RESOURCES_PATH_DEFAULT,
+    RESOURCES_PATH_KEY,
+    RESOURCES_ROOT_PATH_DEFAULT,
+)
+from hailo_apps.hailo_app_python.core.common.installation_utils import create_symlink
+from hailo_apps.hailo_app_python.core.installation.compile_cpp import compile_postprocess
+from hailo_apps.hailo_app_python.core.installation.download_resources import download_resources
+from hailo_apps.hailo_app_python.core.installation.set_env import (
+    handle_dot_env,
+    set_environment_vars,
+)
 
 
 def setup_resource_dirs():
-    """
-    Create resource directories for Hailo applications.
+    """Create resource directories for Hailo applications.
     Also sets ownership and permissions.
     """
     hailo_logger.debug("Entering setup_resource_dirs()")
@@ -54,7 +55,10 @@ def setup_resource_dirs():
 
     # Set permissions
     hailo_logger.debug(f"Setting ownership to {install_user}:{grpname}")
-    subprocess.run(["sudo", "chown", "-R", f"{install_user}:{grpname}", str(RESOURCES_ROOT_PATH_DEFAULT)], check=True)
+    subprocess.run(
+        ["sudo", "chown", "-R", f"{install_user}:{grpname}", str(RESOURCES_ROOT_PATH_DEFAULT)],
+        check=True,
+    )
     hailo_logger.debug("Setting directory permissions to 755")
     subprocess.run(["sudo", "chmod", "-R", "755", str(RESOURCES_ROOT_PATH_DEFAULT)], check=True)
 
@@ -63,13 +67,15 @@ def setup_resource_dirs():
 
 
 def post_install():
-    """
-    Post-installation setup for Hailo Apps Infra.
-    """
+    """Post-installation setup for Hailo Apps Infra."""
     hailo_logger.debug("Starting post_install()")
     parser = argparse.ArgumentParser(description="Post-installation script for Hailo Apps Infra")
-    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to config file")
-    parser.add_argument("--group", type=str, default=RESOURCES_GROUP_DEFAULT, help="Resource group to download")
+    parser.add_argument(
+        "--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to config file"
+    )
+    parser.add_argument(
+        "--group", type=str, default=RESOURCES_GROUP_DEFAULT, help="Resource group to download"
+    )
     parser.add_argument("--dotenv", type=str, default=DEFAULT_DOTENV_PATH, help="Path to .env file")
     args = parser.parse_args()
 

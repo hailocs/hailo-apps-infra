@@ -1,15 +1,18 @@
 # hailo_logger.py
 from __future__ import annotations
+
 import logging
 import os
 import sys
 import uuid
 from datetime import datetime
-from typing import Optional
 
 # ---- module state (singleton-ish) ----
 _CONFIGURED = False
-_RUN_ID = os.getenv("HAILO_RUN_ID") or datetime.utcnow().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+_RUN_ID = (
+    os.getenv("HAILO_RUN_ID")
+    or datetime.utcnow().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+)
 
 # Basic string->level map (kept small & obvious)
 _LEVELS = {
@@ -20,21 +23,22 @@ _LEVELS = {
     "DEBUG": logging.DEBUG,
 }
 
-def _coerce_level(level: Optional[str | int]) -> int:
+
+def _coerce_level(level: str | int | None) -> int:
     if isinstance(level, int):
         return level
     if level is None:
         return logging.INFO
     return _LEVELS.get(str(level).upper(), logging.INFO)
 
+
 def init_logging(
     *,
-    level: Optional[str | int] = None,
-    log_file: Optional[str] = None,
+    level: str | int | None = None,
+    log_file: str | None = None,
     force: bool = False,
 ) -> str:
-    """
-    Configure root logger exactly once (unless force=True).
+    """Configure root logger exactly once (unless force=True).
     Returns the run_id (stable across the process).
 
     Priority for level:
@@ -82,19 +86,22 @@ def init_logging(
     _CONFIGURED = True
     return _RUN_ID
 
+
 class _RunContextFilter(logging.Filter):
     """Inject a stable run_id into every record."""
+
     def __init__(self, run_id: str):
         super().__init__()
         self.run_id = run_id
+
     def filter(self, record: logging.LogRecord) -> bool:
         if not hasattr(record, "run_id"):
             record.run_id = self.run_id
         return True
 
+
 def get_logger(name: str) -> logging.Logger:
-    """
-    Creates or retrieves a logger configured according to LOG_LEVEL from .env.
+    """Creates or retrieves a logger configured according to LOG_LEVEL from .env.
     Falls back to INFO if not specified or invalid.
     """
     # Read log level from .env, default to INFO
@@ -104,7 +111,7 @@ def get_logger(name: str) -> logging.Logger:
         "INFO": logging.INFO,
         "WARNING": logging.WARNING,
         "ERROR": logging.ERROR,
-        "CRITICAL": logging.CRITICAL
+        "CRITICAL": logging.CRITICAL,
     }
     log_level = valid_levels.get(log_level_str, logging.INFO)
 
@@ -113,8 +120,7 @@ def get_logger(name: str) -> logging.Logger:
         logger.setLevel(log_level)
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -122,10 +128,9 @@ def get_logger(name: str) -> logging.Logger:
 
     return logger
 
+
 def add_logging_cli_args(parser) -> None:
-    """
-    Convenience helper: add --log-level/--debug/--log-file flags to an argparse parser.
-    """
+    """Convenience helper: add --log-level/--debug/--log-file flags to an argparse parser."""
     parser.add_argument(
         "--log-level",
         default=os.getenv("HAILO_LOG_LEVEL", "INFO"),
@@ -143,9 +148,15 @@ def add_logging_cli_args(parser) -> None:
         help="Optional log file path (also respects $HAILO_LOG_FILE).",
     )
 
+
 def level_from_args(args) -> str:
     """Resolve level string from argparse args."""
-    return "DEBUG" if getattr(args, "debug", False) else str(getattr(args, "log_level", "INFO")).upper()
+    return (
+        "DEBUG"
+        if getattr(args, "debug", False)
+        else str(getattr(args, "log_level", "INFO")).upper()
+    )
+
 
 # If someone forgets to init, default to INFO console so logs still show up.
 if os.getenv("HAILO_LOG_AUTOCONFIG", "1") == "1":

@@ -3,33 +3,39 @@
 
 # Third-party imports
 import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst
-import numpy as np
 
+gi.require_version("Gst", "1.0")
 # Local application-specific imports
 import hailo
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
+import numpy as np
+from gi.repository import Gst
+
 from hailo_apps.hailo_app_python.apps.depth.depth_pipeline import GStreamerDepthApp
 
 # Logger
 from hailo_apps.hailo_app_python.core.common.hailo_logger import (
     get_logger,
 )
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
+
 hailo_logger = get_logger(__name__)
 # endregion imports
 
+
 # User-defined class to be used in the callback function: Inheritance from the app_callback_class
 class user_app_callback_class(app_callback_class):
-
     def __init__(self):
         super().__init__()
 
     def calculate_average_depth(self, depth_mat):
-        depth_values = np.array(depth_mat).flatten()  # Flatten the array and filter out outlier pixels
+        depth_values = np.array(
+            depth_mat
+        ).flatten()  # Flatten the array and filter out outlier pixels
         try:
-            m_depth_values = depth_values[depth_values <= np.percentile(depth_values, 95)]  # drop 5% of highest values (outliers)          
-        except Exception as e:
+            m_depth_values = depth_values[
+                depth_values <= np.percentile(depth_values, 95)
+            ]  # drop 5% of highest values (outliers)
+        except Exception:
             hailo_logger.exception("Percentile computation failed; treating as empty depth set.")
             m_depth_values = np.array([])
         if len(m_depth_values) > 0:
@@ -37,6 +43,7 @@ class user_app_callback_class(app_callback_class):
         else:
             average_depth = 0  # Default value if no valid pixels are found
         return average_depth
+
 
 # User-defined callback function: This is the callback function that will be called when data is available from the pipeline
 def app_callback(pad, info, user_data):
@@ -56,11 +63,12 @@ def app_callback(pad, info, user_data):
     else:
         detection_average_depth = 0
 
-    string_to_print += (f"average depth: {detection_average_depth:.2f}\n")
+    string_to_print += f"average depth: {detection_average_depth:.2f}\n"
     print(string_to_print)
     hailo_logger.info(string_to_print.strip())
 
     return Gst.PadProbeReturn.OK
+
 
 if __name__ == "__main__":
     hailo_logger.info("Starting Depth callback runner...")

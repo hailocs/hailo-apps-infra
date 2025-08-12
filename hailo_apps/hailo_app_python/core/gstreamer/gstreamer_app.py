@@ -1,36 +1,21 @@
 import multiprocessing
-from pathlib import Path
-import setproctitle
-import signal
 import os
-import gi
-import threading
-import sys
-import cv2
-import numpy as np
-import time
 import queue
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst, GLib, GObject
+import signal
+import sys
+import threading
+from pathlib import Path
 
-# hailo_app_python/core/gstreamer/gstreamer_app.py
+import cv2
+import gi
+import setproctitle
 
-# Absolute import for your local helper
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import (
-    get_source_type,
-)
+gi.require_version("Gst", "1.0")
+from gi.repository import GLib, GObject, Gst
 
-# Absolute imports for your common utilities
-from hailo_apps.hailo_app_python.core.common.defines import (
-    HAILO_RGB_VIDEO_FORMAT,
-    GST_VIDEO_SINK,
-    TAPPAS_POSTPROC_PATH_KEY,
-    RESOURCES_PATH_KEY,
-    RESOURCES_ROOT_PATH_DEFAULT,
-    RESOURCES_VIDEOS_DIR_NAME,
-    BASIC_PIPELINES_VIDEO_EXAMPLE_NAME,
-    USB_CAMERA,
-    RPI_NAME_I,
+from hailo_apps.hailo_app_python.core.common.buffer_utils import (
+    get_caps_from_pad,
+    get_numpy_from_buffer,
 )
 from hailo_apps.hailo_app_python.core.common.camera_utils import (
     get_usb_video_devices,
@@ -38,18 +23,33 @@ from hailo_apps.hailo_app_python.core.common.camera_utils import (
 from hailo_apps.hailo_app_python.core.common.core import (
     load_environment,
 )
-from hailo_apps.hailo_app_python.core.common.buffer_utils import (
-    get_caps_from_pad,
-    get_numpy_from_buffer,
+
+# Absolute imports for your common utilities
+from hailo_apps.hailo_app_python.core.common.defines import (
+    BASIC_PIPELINES_VIDEO_EXAMPLE_NAME,
+    GST_VIDEO_SINK,
+    HAILO_RGB_VIDEO_FORMAT,
+    RESOURCES_ROOT_PATH_DEFAULT,
+    RESOURCES_VIDEOS_DIR_NAME,
+    RPI_NAME_I,
+    TAPPAS_POSTPROC_PATH_KEY,
+    USB_CAMERA,
+)
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
+# hailo_app_python/core/gstreamer/gstreamer_app.py
+# Absolute import for your local helper
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import (
+    get_source_type,
 )
 
-from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
 hailo_logger = get_logger(__name__)
 
 try:
     from picamera2 import Picamera2
 except ImportError:
     hailo_logger.warning("Picamera2 not available; skipping import (likely non-Pi OS).")
+
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
@@ -108,17 +108,23 @@ class GStreamerApp:
         hailo_logger.debug(f"Loading environment from {env_file}")
         load_environment(env_file)
 
-        tappas_post_process_dir = Path(os.environ.get(TAPPAS_POSTPROC_PATH_KEY, ''))
-        if tappas_post_process_dir == '':
+        tappas_post_process_dir = Path(os.environ.get(TAPPAS_POSTPROC_PATH_KEY, ""))
+        if tappas_post_process_dir == "":
             hailo_logger.error("TAPPAS_POST_PROC_DIR environment variable not set.")
-            print("TAPPAS_POST_PROC_DIR environment variable is not set. Please set it by running set-env in cli")
+            print(
+                "TAPPAS_POST_PROC_DIR environment variable is not set. Please set it by running set-env in cli"
+            )
             exit(1)
 
         self.current_path = os.path.dirname(os.path.abspath(__file__))
         self.postprocess_dir = tappas_post_process_dir
 
         if self.options_menu.input is None:
-            self.video_source = str(Path(RESOURCES_ROOT_PATH_DEFAULT) / RESOURCES_VIDEOS_DIR_NAME / BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
+            self.video_source = str(
+                Path(RESOURCES_ROOT_PATH_DEFAULT)
+                / RESOURCES_VIDEOS_DIR_NAME
+                / BASIC_PIPELINES_VIDEO_EXAMPLE_NAME
+            )
         else:
             self.video_source = self.options_menu.input
 
@@ -127,7 +133,9 @@ class GStreamerApp:
             self.video_source = get_usb_video_devices()
             if not self.video_source:
                 hailo_logger.error("No USB camera found for '--input usb'")
-                print('Provided argument "--input" is set to "usb", however no available USB cameras found. Please connect a camera or specifiy different input method.')
+                print(
+                    'Provided argument "--input" is set to "usb", however no available USB cameras found. Please connect a camera or specifiy different input method.'
+                )
                 exit(1)
             else:
                 hailo_logger.debug(f"Using USB camera: {self.video_source[0]}")
@@ -154,7 +162,9 @@ class GStreamerApp:
 
         user_data.use_frame = self.options_menu.use_frame
 
-        self.sync = "false" if (self.options_menu.disable_sync or self.source_type != "file") else "true"
+        self.sync = (
+            "false" if (self.options_menu.disable_sync or self.source_type != "file") else "true"
+        )
         self.show_fps = self.options_menu.show_fps
 
         if self.options_menu.dump_dot:
@@ -165,7 +175,7 @@ class GStreamerApp:
 
     def appsink_callback(self, appsink):
         hailo_logger.debug("appsink_callback triggered")
-        sample = appsink.emit('pull-sample')
+        sample = appsink.emit("pull-sample")
         if sample:
             buffer = sample.get_buffer()
             if buffer:
@@ -199,7 +209,9 @@ class GStreamerApp:
 
         if self.show_fps:
             hailo_logger.debug("Connecting FPS measurement callback")
-            self.pipeline.get_by_name("hailo_display").connect("fps-measurements", self.on_fps_measurement)
+            self.pipeline.get_by_name("hailo_display").connect(
+                "fps-measurements", self.on_fps_measurement
+            )
 
         self.loop = GLib.MainLoop()
 
@@ -217,7 +229,7 @@ class GStreamerApp:
             self.error_occurred = True
             self.shutdown()
         elif t == Gst.MessageType.QOS:
-            if not hasattr(self, 'qos_count'):
+            if not hasattr(self, "qos_count"):
                 self.qos_count = 0
             self.qos_count += 1
             hailo_logger.warning(f"QoS message #{self.qos_count}")
@@ -225,7 +237,9 @@ class GStreamerApp:
                 qos_element = message.src.get_name()
                 hailo_logger.warning(f"Lots of QoS messages from {qos_element}")
                 print(f"\033[91mQoS message received from {qos_element}\033[0m")
-                print(f"\033[91mLots of QoS messages received: {self.qos_count}, consider optimizing...\033[0m")
+                print(
+                    f"\033[91mLots of QoS messages received: {self.qos_count}, consider optimizing...\033[0m"
+                )
         return True
 
     def on_eos(self):
@@ -262,8 +276,10 @@ class GStreamerApp:
         self.pipeline.set_state(Gst.State.NULL)
         GLib.idle_add(self.loop.quit)
 
-    def update_fps_caps(self, new_fps=30, source_name='source'):
-        hailo_logger.debug(f"update_fps_caps() called with new_fps={new_fps}, source_name={source_name}")
+    def update_fps_caps(self, new_fps=30, source_name="source"):
+        hailo_logger.debug(
+            f"update_fps_caps() called with new_fps={new_fps}, source_name={source_name}"
+        )
         videorate_name = f"{source_name}_videorate"
         capsfilter_name = f"{source_name}_fps_caps"
 
@@ -284,7 +300,7 @@ class GStreamerApp:
             new_caps_str = f"video/x-raw, framerate={new_fps}/1"
             hailo_logger.debug(f"Updating capsfilter to: {new_caps_str}")
             capsfilter.set_property("caps", Gst.Caps.from_string(new_caps_str))
-            print(f"Updated capsfilter caps to match new rate")
+            print("Updated capsfilter caps to match new rate")
 
         self.frame_rate = new_fps
 
@@ -316,7 +332,7 @@ class GStreamerApp:
                 )
 
         hailo_display = self.pipeline.get_by_name("hailo_display")
-        if hailo_display is None and not getattr(self.options_menu, 'ui', False):
+        if hailo_display is None and not getattr(self.options_menu, "ui", False):
             hailo_logger.warning("hailo_display not found in pipeline")
             print("Warning: hailo_display element not found...")
 
@@ -333,7 +349,7 @@ class GStreamerApp:
             hailo_logger.debug("Starting picamera_thread")
             picam_thread = threading.Thread(
                 target=picamera_thread,
-                args=(self.pipeline, self.video_width, self.video_height, self.video_format)
+                args=(self.pipeline, self.video_width, self.video_height, self.video_format),
             )
             self.threads.append(picam_thread)
             picam_thread.start()
@@ -379,31 +395,31 @@ def picamera_thread(pipeline, video_width, video_height, video_format, picamera_
 
     with Picamera2() as picam2:
         if picamera_config is None:
-            main = {'size': (1280, 720), 'format': 'RGB888'}
-            lores = {'size': (video_width, video_height), 'format': 'RGB888'}
-            controls = {'FrameRate': 30}
+            main = {"size": (1280, 720), "format": "RGB888"}
+            lores = {"size": (video_width, video_height), "format": "RGB888"}
+            controls = {"FrameRate": 30}
             config = picam2.create_preview_configuration(main=main, lores=lores, controls=controls)
         else:
             config = picamera_config
 
         picam2.configure(config)
-        lores_stream = config['lores']
-        format_str = 'RGB' if lores_stream['format'] == 'RGB888' else video_format
-        width, height = lores_stream['size']
+        lores_stream = config["lores"]
+        format_str = "RGB" if lores_stream["format"] == "RGB888" else video_format
+        width, height = lores_stream["size"]
         hailo_logger.debug(f"Picamera2 config: width={width}, height={height}, format={format_str}")
 
         appsrc.set_property(
             "caps",
             Gst.Caps.from_string(
                 f"video/x-raw, format={format_str}, width={width}, height={height}, framerate=30/1, pixel-aspect-ratio=1/1"
-            )
+            ),
         )
         picam2.start()
         frame_count = 0
         print("picamera_process started")
 
         while True:
-            frame_data = picam2.capture_array('lores')
+            frame_data = picam2.capture_array("lores")
             if frame_data is None:
                 hailo_logger.error("Failed to capture frame")
                 print("Failed to capture frame.")
@@ -414,7 +430,7 @@ def picamera_thread(pipeline, video_width, video_height, video_format, picamera_
             buffer_duration = Gst.util_uint64_scale_int(1, Gst.SECOND, 30)
             buffer.pts = frame_count * buffer_duration
             buffer.duration = buffer_duration
-            ret = appsrc.emit('push-buffer', buffer)
+            ret = appsrc.emit("push-buffer", buffer)
 
             if ret == Gst.FlowReturn.FLUSHING:
                 hailo_logger.warning("Pipeline flushing; stopping picamera_thread")
@@ -438,8 +454,8 @@ def disable_qos(pipeline):
         if result != Gst.IteratorResult.OK:
             break
 
-        if 'qos' in GObject.list_properties(element):
-            element.set_property('qos', False)
+        if "qos" in GObject.list_properties(element):
+            element.set_property("qos", False)
             hailo_logger.debug(f"Set qos=False for {element.get_name()}")
             print(f"Set qos to False for {element.get_name()}")
 
