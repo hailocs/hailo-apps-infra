@@ -24,6 +24,7 @@ from .defines import (
     FACE_RECOGNITION_PIPELINE,
     FACE_RECON_DIR_NAME,
     HAILO8_ARCH,
+    MULTI_SOURCE_DIR_NAME,
     HAILO10H_ARCH,
     HAILO_ARCH_KEY,
     HAILO_FILE_EXTENSION,
@@ -163,6 +164,8 @@ def get_resource_path(
         return root / RESOURCES_JSON_DIR_NAME / model
     if resource_type == FACE_RECON_DIR_NAME and model:
         return root / FACE_RECON_DIR_NAME / model
+    if resource_type == MULTI_SOURCE_DIR_NAME and model:
+        return (root / MULTI_SOURCE_DIR_NAME / model)
     if resource_type == DEFAULT_LOCAL_RESOURCES_PATH and model:
         return root / DEFAULT_LOCAL_RESOURCES_PATH / model
 
