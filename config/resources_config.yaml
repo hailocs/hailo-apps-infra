@@ -17,6 +17,8 @@ hailo8:
   - yolov8m_pose
   - scrfd_10g
   - arcface_mobilefacenet
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/ocr_det.hef
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/ocr.hef
 
 hailo8l:
   - yolov8s
