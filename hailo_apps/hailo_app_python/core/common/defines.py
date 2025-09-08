@@ -222,6 +222,19 @@ ARCFACE_MOBILEFACENET_POSTPROCESS_FUNCTION = "filter"
 SCRFD_8_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
 SCRFD_8L_POSTPROCESS_FUNCTION = "scrfd_2_5g_letterbox"
 
+# OCR Pipeline defaults
+OCR_APP_TITLE = "Hailo OCR App"
+OCR_PIPELINE = "paddle_ocr"
+OCR_DET_PIPELINE = "ocr_det"
+OCR_DET_MODEL_NAME = "ocr_det"
+OCR_DET_POSTPROCESS_FUNCTION = "paddleocr_det"
+OCR_REC_PIPELINE = "ocr_rec"
+OCR_REC_MODEL_NAME = "ocr"
+OCR_REC_POSTPROCESS_FUNCTION = "paddleocr_recognize"
+OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
+OCR_CROPPER_POSTPROCESS_FUNCTION = "crop_text_regions"
+OCR_VIDEO_NAME = "ocr.mp4"
+
 # Multisource pipeline defaults
 MULTI_SOURCE_APP_TITLE = "Hailo Multisource App"
 MULTI_SOURCE_PARAMS_JSON_NAME = "multisource_params.json"

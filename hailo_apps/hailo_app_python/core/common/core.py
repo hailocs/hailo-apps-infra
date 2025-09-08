@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 from .defines import (
     DEFAULT_DOTENV_PATH,
     DEFAULT_LOCAL_RESOURCES_PATH,
+    OCR_DET_MODEL_NAME,
+    OCR_DET_PIPELINE,
+    OCR_REC_MODEL_NAME,
+    OCR_PIPELINE,
     DEPTH_MODEL_NAME,
     DEPTH_PIPELINE,
     DETECTION_MODEL_NAME_H8,
@@ -31,6 +35,7 @@ from .defines import (
     INSTANCE_SEGMENTATION_MODEL_NAME_H8,
     INSTANCE_SEGMENTATION_MODEL_NAME_H8L,
     INSTANCE_SEGMENTATION_PIPELINE,
+    OCR_REC_PIPELINE,
     POSE_ESTIMATION_MODEL_NAME_H8,
     POSE_ESTIMATION_MODEL_NAME_H8L,
     POSE_ESTIMATION_PIPELINE,
@@ -136,6 +141,12 @@ def get_model_name(pipeline_name: str, arch: str) -> str:
         FACE_RECOGNITION_PIPELINE: FACE_RECOGNITION_MODEL_NAME_H8
         if is_h8
         else FACE_RECOGNITION_MODEL_NAME_H8L,
+        OCR_REC_PIPELINE: OCR_REC_MODEL_NAME 
+        if is_h8 
+        else (lambda: exec('raise ValueError("OCR Rec not supported on Hailo8L for now!")'))(),    
+        OCR_DET_PIPELINE: OCR_DET_MODEL_NAME
+        if is_h8
+        else (lambda: exec('raise ValueError("OCR Det not supported on Hailo8L for now!")'))(),
     }
     name = pipeline_map[pipeline_name]
     hailo_logger.debug(f"Resolved model name: {name}")
@@ -165,7 +176,7 @@ def get_resource_path(
     if resource_type == FACE_RECON_DIR_NAME and model:
         return root / FACE_RECON_DIR_NAME / model
     if resource_type == MULTI_SOURCE_DIR_NAME and model:
-        return (root / MULTI_SOURCE_DIR_NAME / model)
+        return root / MULTI_SOURCE_DIR_NAME / model
     if resource_type == DEFAULT_LOCAL_RESOURCES_PATH and model:
         return root / DEFAULT_LOCAL_RESOURCES_PATH / model
 
