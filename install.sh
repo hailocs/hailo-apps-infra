@@ -97,10 +97,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# 1) Grab *only* the SUMMARY line (strip off the "SUMMARY: " prefix)
 SUMMARY_LINE=$(
   sudo -u "${SUDO_USER:-$USER}" -H ./scripts/check_installed_packages.sh 2>&1 \
     | sed -n 's/^SUMMARY: //p'
 )
+
 
 if [[ -z "$SUMMARY_LINE" ]]; then
   echo "❌ Could not find SUMMARY line" >&2

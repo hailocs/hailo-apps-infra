@@ -9,6 +9,9 @@ default:
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/face_recon_algo_params.json
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/yolov5m_seg.json
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/yolov5n_seg.json
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/yolov5m_vehicle.json
+
+
 
 
 hailo8:

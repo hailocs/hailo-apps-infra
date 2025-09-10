@@ -149,6 +149,7 @@ install_file() {
   if [[ "$file" == *.deb ]]; then
     sudo dpkg -i "$path"
   elif [[ "$file" == *.whl ]]; then
+<<<<<<< HEAD
     if python3 -c "import site; import os; print(os.access(site.getsitepackages()[0], os.W_OK))" 2>/dev/null | grep -q "True"; then
       echo "Installing system-wide (writable site-packages)"
       python3 -m pip install "$path" --break-system-packages
@@ -156,6 +157,9 @@ install_file() {
       echo "Installing with --user flag (user site-packages)"
       python3 -m pip install "$path" --user --break-system-packages 
     fi
+=======
+    python3 -m pip install "$path" --break-system-packages
+>>>>>>> 35a2a6b (lpr_ready)
   else
     echo "Unknown file type: $file"
   fi

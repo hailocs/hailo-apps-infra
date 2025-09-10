@@ -243,6 +243,27 @@ OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
 OCR_CROPPER_POSTPROCESS_FUNCTION = "crop_text_regions"
 OCR_VIDEO_NAME = "ocr.mp4"
 
+# LPR Pipeline defaults
+LPR_APP_TITLE = "Hailo License Plate Recognition App"
+LPR_PIPELINE = "license_plate_recognition"
+LPR_VEHICLE_HEF_NAME = "yolov5m_vehicles"
+LPR_VEHICLE_POSTPROCESS_SO_FILENAME = "libyolo_hailortpp_postprocess.so"
+LPR_VEHICLE_POSTPROCESS_FUNCTION = "yolov5m_vehicles"
+LPR_VEHICLE_CROPPER_FUNCTION = "vehicles_without_ocr"
+LPR_LICENSE_DET_HEF_NAME = "yolov8n_lp_det"
+LPR_LICENSE_DET_POSTPROCESS_SO_FILENAME = "libyolo_hailortpp_postprocess.so"
+LPR_LICENSE_DET_POSTPROCESS_FUNCTION = "filter_letterbox"
+LPR_OCR_MODEL_NAME= "ocr"
+LPR_OCR_POSTPROCESS_SO_FILENAME = ""
+LPR_OCR_POSTPROCESS_FUNCTION = "filter_letterbox"
+LPR_VIDEO_NAME = "lpr.mp4"
+LPR_DB_DIR_NAME = "lpr_db"
+LPR_OVERLAY_SO = "liblpr_overlay.so"
+LPR_OCRSINK_SO = "liblpr_ocrsink.so"
+LPR_CROPPER_SO = "liblpr_croppers.so"
+LPR_QUALITY_ESTIMATION_FUNCTION_NAME = "license_plate_quality_estimation"
+
+
 # Multisource pipeline defaults
 MULTI_SOURCE_APP_TITLE = "Hailo Multisource App"
 MULTI_SOURCE_PARAMS_JSON_NAME = "multisource_params.json"

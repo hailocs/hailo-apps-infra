@@ -1,3 +1,52 @@
+
+################################################
+# LPR OVERLAY  SOURCE
+################################################
+
+lpr_overlay_sources = [
+    'lpr_overlay.cpp',
+]
+
+shared_library('lpr_overlay',
+    lpr_overlay_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)
+################################################
+# LPR OCR SINK SOURCE
+################################################
+
+lpr_ocrsink_sources = [
+    'lpr_ocrsink.cpp',
+]
+
+shared_library('lpr_ocrsink',
+    lpr_ocrsink_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)
+################################################
+# LPR CROPPERS POST SOURCES
+################################################
+
+lpr_croppers_sources = [
+    'lpr_croppers.cpp',
+]
+
+shared_library('lpr_croppers',
+    lpr_croppers_sources,
+    include_directories : rapidjson_inc,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: '/usr/local/hailo/resources/so',
+)
 ################################################
 # OCR POST SOURCES
 ################################################
