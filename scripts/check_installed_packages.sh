@@ -1,296 +1,292 @@
 #!/bin/bash
-# Hailo Runtime Installer Script
-# This script downloads and installs all Hailo runtime requirements
-# from the deb server. It performs several checks:
-#   - Checks system architecture (x86_64, aarch64, or Raspberry Pi)
-#   - For Raspberry Pi: if 'hailo-all' is not installed, points to RPi docs and exits.
-#   - Validates Python version (supported: 3.8, 3.9, 3.10, 3.11)
-#   - Checks the kernel version (warns if not officially supported)
-#   - Downloads and installs the following:
-#       * HailoRT driver deb
-#       * HailoRT deb
-#       * Tapas core deb
-#       * HailoRT Python bindings whl
-#       * Tapas core Python bindings whl
-#
-#
 
 set -e
+set -o pipefail
 
-# --- Configurable Variables ---
+# Terminal colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# Base URL of the deb server
-BASE_URL="http://dev-public.hailo.ai/2025-07"
-
-# Default version numbers for packages (if using --version, you can adjust these)
-
-HAILORT_VERSION_H8="4.22.0"
-TAPPAS_CORE_VERSION_H8="5.0.0"
-HAILORT_VERSION_H10="5.0.0"
-TAPPAS_CORE_VERSION_H10="5.0.0"
-
-HAILORT_VERSION="$HAILORT_VERSION_H8"
-TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"
-
-
-# Defaults (can be overridden by flags)
-HW_ARCHITECTURE="H8"               # H8 | H10
-VENV_NAME="hailo_venv"
-DOWNLOAD_ONLY="false"
-OUTPUT_DIR_BASE="packages"
-
-PY_TAG_OVERRIDE=""
-
-usage() {
-  cat <<EOF
-Usage: $0 [options]
-
-Options:
-  --hailort-version=VER           Override HailoRT version
-  --tappas-core-version=VER       Override TAPPAS Core version
-  --venv-name=NAME                Virtualenv name (install mode only) [default: $VENV_NAME]
-  --hw-arch=H8|H10        Target hardware (affects version defaults & folder) [default: $HW_ARCHITECTURE]
-  --download-only                 Only download packages, do NOT install
-  --output-dir=DIR                Base output directory for downloads [default: $OUTPUT_DIR_BASE]
-  --py-tag=TAG                    Wheel tag (e.g. cp311-cp311). Useful with --download-only
-  -h|--help                       Show this help
-EOF
-}
-
-
-# Parse optional command-line flag to override version numbers (e.g., --version=4.20.0)
-# For a more complex versioning scheme, you might also separate HailoRT and TAPPAS versions.
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --hailort-version=*)
-            HAILORT_VERSION="${1#*=}"
-            ;;
-        --tappas-core-version=*)
-            TAPPAS_CORE_VERSION="${1#*=}"
-            ;;
-        --venv-name=*)
-            VENV_NAME="${1#*=}"
-            ;;
-        --hw-arch=*)
-            HW_ARCHITECTURE="${1#*=}"
-            if [[ "$HW_ARCHITECTURE" != "H8" && "$HW_ARCHITECTURE" != "H10" ]]; then
-                echo "Invalid hardware architecture specified. Use 'H8' or 'H10'."
-                exit 1
-            fi
-            if [[ "$HW_ARCHITECTURE" == "H8" ]]; then
-                HAILORT_VERSION="$HAILORT_VERSION_H8"
-                TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"
-            elif [[ "$HW_ARCHITECTURE" == "H10" ]]; then
-                HAILORT_VERSION="$HAILORT_VERSION_H10"
-                TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H10"
-            fi
-            ;;
-        --download-only) 
-            DOWNLOAD_ONLY="true"
-            ;;
-        --output-dir=*)
-            OUTPUT_DIR_BASE="${1#*=}"
-            ;;
-        --py-tag=*)
-            PY_TAG_OVERRIDE="${1#*=}"
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown parameter passed: $1"
-            exit 1
-            ;;
-    esac
-    shift
-done
-
-
-TARGET_DIR="${OUTPUT_DIR_BASE}/${HW_ARCHITECTURE}"
-mkdir -p "$TARGET_DIR"
-echo "Download target directory: $TARGET_DIR"
-HW_NAME=""
-# Determine hardware name based on architecture
-if [[ "$HW_ARCHITECTURE" == "H8" ]]; then
-  HW_NAME="Hailo8"
-else
-  HW_NAME="Hailo10"
-fi
-BASE_URL="${BASE_URL}/${HW_NAME}"
-
-# --- Functions ---
-download_file() {
-  local rel="$1"
-  local url="${BASE_URL}/${rel}"
-  local dst="${TARGET_DIR}/${rel}"
-
-  echo "Downloading ${rel}"
-  mkdir -p "$(dirname "$dst")"
-  if ! wget -q --show-progress "$url" -O "$dst"; then
-    echo "Retrying ${rel}..."
-    wget "$url" -O "$dst"
-  fi
-}
-
-install_file() {
-  local file="$1"
-  local path="${TARGET_DIR}/${file}"
-
-  if [[ "$DOWNLOAD_ONLY" == "true" ]]; then
-    echo "[download-only] Skipping install for $file"
-    return
-  fi
-
-  echo "Installing $file..."
-  if [[ "$file" == *.deb ]]; then
-    sudo dpkg -i "$path"
-  elif [[ "$file" == *.whl ]]; then
-    python3 -m pip install "$path" --break-system-packages
-  else
-    echo "Unknown file type: $file"
-  fi
-}
-
-# -------- System info / tags --------
-ARCH="$(uname -m)"
-KERNEL="$(uname -r)"
-
-if [[ "$ARCH" == "aarch64" && "$KERNEL" == *"rpi"* ]]; then
-    ARCH="rpi"
-fi
-echo "Detected architecture: $ARCH"
-
-# Raspberry Pi detection (same behavior as before, but skip entirely if download-only)
-if [[ "$ARCH" == *"arm"* && "$DOWNLOAD_ONLY" != "true" ]]; then
-  if [[ -f /proc/device-tree/model ]]; then
-    MODEL="$(tr -d '\0' < /proc/device-tree/model || true)"
-    if [[ "$MODEL" == *"Raspberry Pi"* ]]; then
-      echo "Raspberry Pi detected."
-      if ! command -v hailo-all &>/dev/null; then
-        echo "hailo-all is not installed. See RPi docs: https://www.raspberrypi.com/documentation/computers/ai.html"
-        exit 1
-      else
-        echo "hailo-all already installed. This installer does not auto-install on RPi."
-        exit 0
-      fi
-    fi
-  fi
-fi
-
-# Python & kernel checks (skip installs when download-only)
-PY_TAG=""
-if [[ -n "$PY_TAG_OVERRIDE" ]]; then
-  PY_TAG="$PY_TAG_OVERRIDE"
-else
-  if command -v python3 &>/dev/null; then
-    PYTHON_VERSION="$(python3 --version 2>&1 | awk '{print $2}')"
-    echo "Detected Python: $PYTHON_VERSION"
-    if [[ "$PYTHON_VERSION" =~ ^3\.(8|9|10|11) ]]; then
-      PY_VER_MAJOR="$(echo "$PYTHON_VERSION" | cut -d. -f1)"
-      PY_VER_MINOR="$(echo "$PYTHON_VERSION" | cut -d. -f2)"
-      PY_TAG="cp${PY_VER_MAJOR}${PY_VER_MINOR}-cp${PY_VER_MAJOR}${PY_VER_MINOR}"
-    else
-      if [[ "$DOWNLOAD_ONLY" == "true" ]]; then
-        echo "Unsupported Python version ($PYTHON_VERSION). Falling back to cp310-cp310 for download-only."
-        PY_TAG="cp310-cp310"
-      else
-        echo "Unsupported Python version. Supported: 3.8/3.9/3.10/3.11"
-        exit 1
-      fi
-    fi
-  else
-    if [[ "$DOWNLOAD_ONLY" == "true" ]]; then
-      echo "python3 not found. Falling back to cp310-cp310 for download-only."
-      PY_TAG="cp310-cp310"
-    else
-      echo "python3 is required."
-      exit 1
-    fi
-  fi
-fi
-echo "Using wheel tag: $PY_TAG"
-
-if [[ "$DOWNLOAD_ONLY" != "true" ]]; then
-  KERNEL_VERSION="$(uname -r)"
-  echo "Kernel version: $KERNEL_VERSION"
-  OFFICIAL_KERNEL_PREFIX="6.5.0"
-  if [[ "$KERNEL_VERSION" != "$OFFICIAL_KERNEL_PREFIX"* ]]; then
-    echo "Warning: Kernel $KERNEL_VERSION may not be officially supported."
-  fi
-
-  echo "Installing build-essential..."
-  sudo apt-get update && sudo apt-get install -y build-essential
-
-  echo "Installing deps for hailo-tappas-core..."
-  sudo apt-get update && sudo apt-get install -y \
-    ffmpeg python3-virtualenv gcc-12 g++-12 python-gi-dev pkg-config libcairo2-dev \
-    libgirepository1.0-dev libgstreamer1.0-dev cmake libgstreamer-plugins-base1.0-dev \
-    libzmq3-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-bad \
-    gstreamer1.0-libav libopencv-dev python3-opencv rapidjson-dev
-fi
-
-# -------- Build file lists --------
-common_files=(
-  "hailort-pcie-driver_${HAILORT_VERSION}_all.deb"
-  "hailo_tappas_core_python_binding-${TAPPAS_CORE_VERSION}-py3-none-any.whl"
-)
-
-ARCH_FILES=()
-case "$ARCH" in
-  x86_64|amd64)
-    echo "Configuring AMD64 package names..."
-    ARCH_FILES+=("hailort_${HAILORT_VERSION}_amd64.deb")
-    ARCH_FILES+=("hailo-tappas-core_${TAPPAS_CORE_VERSION}_amd64.deb")
-    ARCH_FILES+=("hailort-${HAILORT_VERSION}-${PY_TAG}-linux_x86_64.whl")
-    ;;
-  aarch64|arm64)
-    echo "Configuring ARM64 package names..."
-    ARCH_FILES+=("hailort_${HAILORT_VERSION}_arm64.deb")
-    ARCH_FILES+=("hailo-tappas-core_${TAPPAS_CORE_VERSION}_arm64.deb")
-    ARCH_FILES+=("hailort-${HAILORT_VERSION}-${PY_TAG}-linux_aarch64.whl")
-    ;;
-  rpi)
-    echo "Configuring rpi  package names..."
-    ARCH_FILES+=("hailort_${HAILORT_VERSION}_arm64.deb")
-    if [[ "${TAPPAS_CORE_VERSION}" == "5.0.0" ]]; then
-      # Special-case naming for 5.0.0
-      ARCH_FILES+=("hailo-tappas-core-5.0.0v_5.0.0_arm64.deb")
-    else
-      ARCH_FILES+=("hailo-tappas-core_${TAPPAS_CORE_VERSION}_arm64.deb")
-    fi
-    ARCH_FILES+=("hailort-${HAILORT_VERSION}-${PY_TAG}-linux_aarch64.whl")
-    ;;
-  *)
-    echo "Unsupported architecture: $ARCH"
+# Print error message and exit
+error_exit() {
+    echo -e "${RED}[ERROR] $1${NC}" >&2
     exit 1
-    ;;
-esac
+}
 
-# -------- Download --------
-echo "Downloading common files..."
-for f in "${common_files[@]}"; do
-  download_file "$f"
-done
+# Detect if a Python package is installed via pip and return its version
+detect_pip_pkg_version() {
+    local pkg="$1"
+    # Try various methods to get the package version
+    pip3 list 2>/dev/null | grep -i "^$pkg " | awk '{print $2}' || \
+    python3 -m pip list 2>/dev/null | grep -i "^$pkg " | awk '{print $2}' || \
+    python3 -c "import pkg_resources; print(pkg_resources.get_distribution('$pkg').version)" 2>/dev/null || \
+    echo ""
+}
 
-echo "Downloading arch-specific files..."
-for f in "${ARCH_FILES[@]}"; do
-  download_file "$f"
-done
+# Check if hailo-all pip package is installed
+is_hailo_all_installed() {
+    detect_pip_pkg_version "hailo-all"
+}
 
-echo "All files downloaded to: ${TARGET_DIR}"
+# Check for the hailo_pci and hailo1x_pci kernel modules
+check_kernel_modules() {
+    local modules=("hailo_pci" "hailo1x_pci")
 
-# -------- Install (skipped if download-only) --------
-if [[ "$DOWNLOAD_ONLY" == "true" ]]; then
-  echo "[download-only] Done. Packages saved under ${TARGET_DIR}"
-  exit 0
-fi
+    for module in "${modules[@]}"; do
+        local version="-1"
 
-echo "Starting installation..."
-install_file "${common_files[0]}"       # PCIe driver
-install_file "${ARCH_FILES[0]}"         # HailoRT deb
-install_file "${ARCH_FILES[1]}"         # Tappas Core deb
-install_file "${common_files[1]}"       # Tappas Core Python bindings (any)
-install_file "${ARCH_FILES[2]}"         # HailoRT wheel
+        # First check if the module is loaded
+        if lsmod | grep -q "^$module "; then
+            # Module is loaded, try to get version from modinfo
+            if modinfo "$module" &>/dev/null; then
+                version=$(modinfo "$module" | awk -F ': +' '/^version:/{print $2}')
+                echo "[OK]   $module module loaded and installed, version: $version"
+            else
+                echo "[OK]   $module module loaded (version unknown)"
+                version="unknown"
+            fi
+        elif modinfo "$module" &>/dev/null; then
+            # Module exists on disk but not loaded
+            version=$(modinfo "$module" | awk -F ': +' '/^version:/{print $2}')
+            echo "[OK]   $module module installed (not loaded), version: $version"
+        else
+            # Check for hailort-pcie-driver package as fallback
+            if dpkg -l 2>/dev/null | grep -q "^ii.*hailort-pcie-driver"; then
+                version=$(dpkg -l | grep "^ii.*hailort-pcie-driver" | awk '{print $3}')
+                echo "[OK]   hailort-pcie-driver package installed, version: $version"
+            else
+                echo "[WARN] $module module not found, version: -1"
+            fi
+        fi
 
-echo "Installation complete."
+        # Always echo the version key=value for downstream parsing
+        echo "$module=$version"
+    done
+}
+
+# Check for hailort installation
+check_hailort() {
+    local hailort_version="-1"
+    
+    # Check system installation via apt - handle both regular and versioned packages
+    if dpkg -l 2>/dev/null | grep -E "^ii.*hailort(/| )" | head -1 | grep -q .; then
+        hailort_version=$(dpkg -l | grep -E "^ii.*hailort(/| )" | head -1 | awk '{print $3}')
+        echo "[OK]   hailort (system) version: $hailort_version"
+    # Check with hailortcli if available
+    elif command -v hailortcli >/dev/null 2>&1; then
+        hailort_version=$(hailortcli --version 2>/dev/null | grep -oP 'version \K[0-9\.]+' || echo "-1")
+        if [[ "$hailort_version" != "-1" ]]; then
+            echo "[OK]   hailort (via hailortcli) version: $hailort_version"
+        else
+            echo "[WARNING] hailort not installed, version: -1"
+        fi
+    else
+        echo "[WARNING] hailort not installed, version: -1"
+    fi
+    
+    # Return the version
+    echo "hailort=$hailort_version"
+}
+
+# Check for TAPPAS packages
+check_tappas_packages() {
+    local version="-1"
+    local found=false
+
+    # 1) Check for known Debian packages - handle versioned packages
+    if dpkg -l 2>/dev/null | grep -E "^ii.*(hailo-tappas-core|hailo-tappas|tappas-core|tappas)" | head -1 | grep -q .; then
+        pkg_line=$(dpkg -l 2>/dev/null | grep -E "^ii.*(hailo-tappas-core|hailo-tappas|tappas-core|tappas)" | head -1)
+        pkg_name=$(echo "$pkg_line" | awk '{print $2}')
+        version=$(echo "$pkg_line" | awk '{print $3}')
+        echo "[OK]   $pkg_name (system) version: $version"
+        found=true
+    fi
+
+    # 2) Fallback to pkg-config if no dpkg package found
+    if ! $found; then
+        for pc in hailo-tappas-core hailo_tappas tappas-core tappas; do
+            if pkg-config --exists "$pc" 2>/dev/null; then
+                if pkg-config --modversion "$pc" &>/dev/null; then
+                    version=$(pkg-config --modversion "$pc")
+                    echo "[OK]   pkg-config $pc version: $version"
+                else
+                    echo "[OK]   pkg-config $pc present, version: unknown"
+                    version="unknown"
+                fi
+                found=true
+                break
+            fi
+        done
+    fi
+
+    # 3) If still not found
+    if ! $found; then
+        echo "[MISSING] any of hailo-tappas-core / hailo-tappas / tappas-core (system), version: -1"
+    fi
+
+    # 4) Always return a key=value
+    echo "tappas-core=$version"
+}
+
+# Check for Python HailoRT binding
+check_hailort_py() {
+    local pyhailort_version="-1"
+    
+    # First check if hailo-all is installed
+    hailo_all_ver=$(is_hailo_all_installed)
+    
+    # Check pip-distribution
+    if ver=$(detect_pip_pkg_version "hailort") && [[ -n "$ver" ]]; then
+        pyhailort_version="$ver"
+        echo "[OK]   pip 'hailort' version: $pyhailort_version"
+        
+        # Additional test - try to import in the current environment
+        if python3 -c 'import hailo' >/dev/null 2>&1; then
+            echo "[OK]   Python import 'hailo' succeeded"
+        elif python3 -c 'import hailort' >/dev/null 2>&1; then
+            # Try to get the version from the module itself
+            module_ver=$(python3 -c 'import hailort; print(getattr(hailort, "__version__", "unknown"))' 2>/dev/null)
+            if [[ "$module_ver" != "unknown" && -n "$module_ver" ]]; then
+                pyhailort_version="$module_ver"
+            fi
+            echo "[OK]   Python import 'hailort' succeeded, version: $pyhailort_version"
+        else
+            echo "[WARNING] pip 'hailort' is installed but cannot be imported in current environment"
+        fi
+    elif [[ -n "$hailo_all_ver" ]]; then
+        pyhailort_version="$hailo_all_ver"
+        echo "[OK]   pip 'hailort' is part of hailo-all package: $pyhailort_version"
+        
+        # Check if it can be imported
+        if python3 -c 'import hailo' >/dev/null 2>&1; then
+            echo "[OK]   Python import 'hailo' succeeded"
+        elif python3 -c 'import hailort' >/dev/null 2>&1; then
+            echo "[OK]   Python import 'hailort' succeeded, version: $pyhailort_version"
+        else
+            echo "[WARNING] hailo-all is installed but 'hailort' module cannot be imported"
+        fi
+    else
+        echo "[MISSING] pip 'hailort', version: -1"
+        
+        # One last try - maybe it's importable but not visible to pip
+        if python3 -c 'import hailo' >/dev/null 2>&1; then
+            echo "[OK]   Python import 'hailo' succeeded (not from pip)"
+            pyhailort_version="unknown"
+        elif python3 -c 'import hailort' >/dev/null 2>&1; then
+            module_ver=$(python3 -c 'import hailort; print(getattr(hailort, "__version__", "unknown"))' 2>/dev/null)
+            if [[ "$module_ver" != "unknown" && -n "$module_ver" ]]; then
+                pyhailort_version="$module_ver"
+                echo "[OK]   Python import 'hailort' succeeded (not from pip), version: $pyhailort_version"
+            else
+                echo "[OK]   Python import 'hailort' succeeded but version unknown"
+                pyhailort_version="unknown"
+            fi
+        else
+            echo "[MISSING] Python import 'hailort', version: -1"
+        fi
+    fi
+    
+    # Return the version
+    echo "pyhailort=$pyhailort_version"
+}
+
+# Check for TAPPAS Python binding
+check_tappas_core_py() {
+    local tappas_python_version="-1"
+    
+    # First check if hailo-all is installed
+    hailo_all_ver=$(is_hailo_all_installed)
+    
+    # Check pip-distribution with multiple possible package names
+    found_version=""
+    found_pkg=""
+    for pkg in "hailo-tappas-core-python-binding" "tappas-core-python-binding" "hailo-tappas-python-binding" "tappas"; do
+        if ver=$(detect_pip_pkg_version "$pkg") && [[ -n "$ver" ]]; then
+            tappas_python_version="$ver"
+            found_version="$ver"
+            found_pkg="$pkg"
+            echo "[OK]   pip '$pkg' version: $tappas_python_version"
+            break
+        fi
+    done
+    
+    if [[ -z "$found_version" ]]; then
+        if [[ -n "$hailo_all_ver" ]]; then
+            tappas_python_version="$hailo_all_ver"
+            echo "[OK]   TAPPAS Python binding is part of hailo-all package: $tappas_python_version"
+        else
+            echo "[MISSING] TAPPAS Python binding pip package, version: -1"
+        fi
+    fi
+    
+    # Check if the module can be imported
+    if python3 -c 'import hailo_platform' >/dev/null 2>&1; then
+        # Try to get version from the module
+        module_ver=$(python3 -c 'import hailo_platform; print(getattr(hailo_platform, "__version__", "unknown"))' 2>/dev/null)
+        if [[ "$module_ver" != "unknown" && -n "$module_ver" ]]; then
+            tappas_python_version="$module_ver"
+        fi
+        echo "[OK]   Python import 'hailo_platform' succeeded, version: $tappas_python_version"
+    else
+        if [[ -n "$hailo_all_ver" || -n "$found_version" ]]; then
+            echo "[WARNING] TAPPAS Python package is installed but 'hailo_platform' module cannot be imported"
+            # Don't reset version to -1 if package is installed
+        else
+            echo "[MISSING] Python import 'hailo_platform', version: -1"
+            tappas_python_version="-1"
+        fi
+    fi
+    
+    # Return the version
+    echo "tappas-python=$tappas_python_version"
+}
+
+# Main function to perform all checks
+to_check() {
+    echo "=== Hailo Package Detection ==="
+    echo ""
+    
+    # Display all check results for verbose output
+    kernel_output=$(check_kernel_module)
+    hailort_output=$(check_hailort)
+    tappas_output=$(check_tappas_packages) 
+    pyhailort_output=$(check_hailort_py)
+    tappas_py_output=$(check_tappas_core_py)
+    
+    # Display all outputs (filtering out the key=value lines)
+    echo "Kernel Module Check:"
+    echo "$kernel_output" | grep -v "^hailo_pci="
+    echo ""
+    
+    echo "HailoRT Check:"
+    echo "$hailort_output" | grep -v "^hailort="
+    echo ""
+    
+    echo "TAPPAS Core Check:"
+    echo "$tappas_output" | grep -v "^tappas-core="
+    echo ""
+    
+    echo "Python HailoRT Check:"
+    echo "$pyhailort_output" | grep -v "^pyhailort="
+    echo ""
+    
+    echo "Python TAPPAS Check:"
+    echo "$tappas_py_output" | grep -v "^tappas-python="
+    echo ""
+    
+    # Extract versions from the last line of each output
+    local kernel_version=$(echo "$kernel_output" | grep "^hailo_pci=" | cut -d'=' -f2)
+    local hailort_version=$(echo "$hailort_output" | grep "^hailort=" | cut -d'=' -f2)
+    local tappas_version=$(echo "$tappas_output" | grep "^tappas-core=" | cut -d'=' -f2)
+    local pyhailort_version=$(echo "$pyhailort_output" | grep "^pyhailort=" | cut -d'=' -f2)
+    local tappas_py_version=$(echo "$tappas_py_output" | grep "^tappas-python=" | cut -d'=' -f2)
+    
+    # Print summary
+    echo "================================"
+    echo "SUMMARY: hailo_pci=$kernel_version hailort=$hailort_version pyhailort=$pyhailort_version tappas-core=$tappas_version tappas-python=$tappas_py_version"
+}
+
+# Execute the main function
+to_check
