@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve this script’s directory (install.sh), so venv sits next to it
+# Resolve this script's directory (install.sh), so venv sits next to it
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DOWNLOAD_GROUP="default"
@@ -10,17 +10,60 @@ PYHAILORT_PATH=""
 PYTAPPAS_PATH=""
 NO_INSTALL=false
 
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Install Hailo Apps Infrastructure with virtual environment setup.
+
+OPTIONS:
+    -n, --venv-name NAME        Set virtual environment name (default: venv_hailo_apps)
+    -ph, --pyhailort PATH       Path to custom PyHailoRT wheel file
+    -pt, --pytappas PATH        Path to custom PyTappas wheel file
+    --all                       Download all available models/resources
+    -x, --no-install           Skip installation of Python packages
+    -h, --help                  Show this help message and exit
+
+EXAMPLES:
+    $0                          # Basic installation with default settings
+    $0 -n my_venv               # Use custom virtual environment name
+    $0 --all                    # Install with all models/resources
+    $0 -x                       # Skip Python package installation
+    $0 -ph /path/to/pyhailort.whl -pt /path/to/pytappas.whl  # Use custom wheel files
+
+DESCRIPTION:
+    This script sets up a Python virtual environment for Hailo Apps Infrastructure.
+    It checks for required Hailo components (driver, HailoRT, TAPPAS) and installs
+    missing Python bindings in the virtual environment.
+
+    The script will:
+    1. Check installed Hailo components
+    2. Create/recreate virtual environment
+    3. Install required Python packages
+    4. Download models and resources
+    5. Run post-installation setup
+
+REQUIREMENTS:
+    - Hailo PCI driver must be installed
+    - HailoRT must be installed  
+    - TAPPAS core must be installed
+    
+    Use 'sudo ./scripts/hailo_installer.sh' to install missing components.
+
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -v|--venv-name)
+    -n|--venv-name)
       VENV_NAME="$2"
       shift 2
       ;;
-    -h|--pyhailort)
+    -ph|--pyhailort)
       PYHAILORT_PATH="$2"
       shift 2
       ;;
-    -p|--pytappas)
+    -pt|--pytappas)
       PYTAPPAS_PATH="$2"
       shift 2
       ;;
@@ -28,23 +71,30 @@ while [[ $# -gt 0 ]]; do
       DOWNLOAD_GROUP="all"
       shift
       ;;
-    -n | --no-install)
-      # Skip installation of Python packages
+    -x | --no-install)
       NO_INSTALL=true
       echo "Skipping installation of Python packages."
       shift
       ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
     *)
-      shift
+      echo "Unknown option: $1"
+      echo "Use -h or --help for usage information."
+      exit 1
       ;;
   esac
 done
 
 # 1) Grab *only* the SUMMARY line (strip off the "SUMMARY: " prefix)
+# run check script as the original user, not root
 SUMMARY_LINE=$(
-  ./scripts/check_installed_packages.sh 2>&1 \
+  sudo -u "${SUDO_USER:-$USER}" -H ./scripts/check_installed_packages.sh 2>&1 \
     | sed -n 's/^SUMMARY: //p'
 )
+
 
 if [[ -z "$SUMMARY_LINE" ]]; then
   echo "❌ Could not find SUMMARY line" >&2
@@ -173,7 +223,6 @@ echo "📦 Installing package (editable + post-install)…"
 pip install -e .
 
 echo "🔧 Running post-install script…"
-echo "❌❌❌ The CPP post process should be fixed 📦📦  ❌❌❌❌"
 
 hailo-post-install --group "$DOWNLOAD_GROUP"
 
