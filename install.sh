@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve this script's directory (install.sh), so venv sits next to it
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DOWNLOAD_GROUP="default"
@@ -9,6 +8,16 @@ VENV_NAME="venv_hailo_apps"
 PYHAILORT_PATH=""
 PYTAPPAS_PATH=""
 NO_INSTALL=false
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+
+as_original_user() {
+  if [[ ${EUID:-$(id -u)} -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    sudo -n -u "$SUDO_USER" -H -- "$@"
+  else
+    "$@"
+  fi
+}
 
 show_help() {
     cat << EOF
@@ -88,13 +97,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# 1) Grab *only* the SUMMARY line (strip off the "SUMMARY: " prefix)
-# run check script as the original user, not root
 SUMMARY_LINE=$(
   sudo -u "${SUDO_USER:-$USER}" -H ./scripts/check_installed_packages.sh 2>&1 \
     | sed -n 's/^SUMMARY: //p'
 )
-
 
 if [[ -z "$SUMMARY_LINE" ]]; then
   echo "❌ Could not find SUMMARY line" >&2
@@ -112,7 +118,6 @@ PYTAPPAS_VERSION="${pairs[4]#*=}"
 INSTALL_HAILORT=false
 INSTALL_TAPPAS_CORE=false
 
-# 2) Check installed versions
 if [[ "$DRIVER_VERSION" == "-1" ]]; then
   echo "❌ Hailo PCI driver is not installed. Please install it first."
   echo "To install the driver, run:"
@@ -151,19 +156,27 @@ fi
 
 VENV_PATH="${SCRIPT_DIR}/${VENV_NAME}"
 
-# If a venv with this name already exists, delete it
 if [[ -d "${VENV_PATH}" ]]; then
   echo "🗑️  Removing existing virtualenv at ${VENV_PATH}"
   rm -rf "${VENV_PATH}"
 fi
 
-# Clean up build artifacts from the current directory
 echo "🧹 Cleaning up build artifacts..."
 find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
 rm -rf build/ dist/ 2>/dev/null || true
 echo "✅ Build artifacts cleaned"
 
-# Ensure Meson is installed
+# Remove existing .env file if it exists
+if [[ -f "${ENV_FILE}" ]]; then
+  echo "🗑️  Removing existing .env file at ${ENV_FILE}"
+  as_original_user rm -f "${ENV_FILE}"
+fi
+
+# Create .env file with proper ownership and permissions
+as_original_user touch "${ENV_FILE}"
+as_original_user chmod 644 "${ENV_FILE}"
+echo "✅ Created .env file at ${ENV_FILE}"
+
 sudo apt-get install -y meson
 sudo apt install python3-gi python3-gi-cairo
 
@@ -176,7 +189,6 @@ if [[ ! -f "${VENV_PATH}/bin/activate" ]]; then
 fi
 
 echo "🔌 Activating venv: ${VENV_NAME}"
-# shellcheck disable=SC1090
 source "${VENV_PATH}/bin/activate"
 
 if [[ -n "$PYHAILORT_PATH" ]]; then
@@ -186,7 +198,7 @@ if [[ -n "$PYHAILORT_PATH" ]]; then
     exit 1
   fi
   pip install "$PYHAILORT_PATH"
-  INSTALL_HAILORT= false
+  INSTALL_HAILORT=false
 fi
 if [[ -n "$PYTAPPAS_PATH" ]]; then
   echo "Using custom TAPPAS Python binding path: $PYTAPPAS_PATH"
@@ -198,7 +210,6 @@ if [[ -n "$PYTAPPAS_PATH" ]]; then
   INSTALL_TAPPAS_CORE=false
 fi
 
-# run  hailo python packages installation script
 echo "📦 Installing Python Hailo packages…"
 FLAGS=""
 if [[ "$INSTALL_TAPPAS_CORE" = true ]]; then

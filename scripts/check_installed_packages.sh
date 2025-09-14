@@ -30,16 +30,34 @@ is_hailo_all_installed() {
     detect_pip_pkg_version "hailo-all"
 }
 
-# Check for the hailo_pci and hailo1x_pci kernel modules
-check_kernel_modules() {
-    local modules=("hailo_pci" "hailo1x_pci")
+check_kernel_module() {
+    local version="-1"
+    local module=""
+    local module_found="false"
 
-    for module in "${modules[@]}"; do
-        local version="-1"
+    # Try to find hailo_pci module first
+    if lsmod | grep -q "^hailo_pci "; then
+        module="hailo_pci"
+        module_found="true"
+    elif modinfo hailo_pci &>/dev/null; then
+        module="hailo_pci"
+        module_found="true"
+    fi
 
-        # First check if the module is loaded
+    # If hailo_pci was not found, check for hailo1x_pci
+    if [[ "$module_found" == "false" ]]; then
+        if lsmod | grep -q "^hailo1x_pci "; then
+            module="hailo1x_pci"
+            module_found="true"
+        elif modinfo hailo1x_pci &>/dev/null; then
+            module="hailo1x_pci"
+            module_found="true"
+        fi
+    fi
+
+    # If a module was found, get its version
+    if [[ "$module_found" == "true" ]]; then
         if lsmod | grep -q "^$module "; then
-            # Module is loaded, try to get version from modinfo
             if modinfo "$module" &>/dev/null; then
                 version=$(modinfo "$module" | awk -F ': +' '/^version:/{print $2}')
                 echo "[OK]   $module module loaded and installed, version: $version"
@@ -47,23 +65,26 @@ check_kernel_modules() {
                 echo "[OK]   $module module loaded (version unknown)"
                 version="unknown"
             fi
-        elif modinfo "$module" &>/dev/null; then
-            # Module exists on disk but not loaded
+        else
             version=$(modinfo "$module" | awk -F ': +' '/^version:/{print $2}')
             echo "[OK]   $module module installed (not loaded), version: $version"
-        else
-            # Check for hailort-pcie-driver package as fallback
-            if dpkg -l 2>/dev/null | grep -q "^ii.*hailort-pcie-driver"; then
-                version=$(dpkg -l | grep "^ii.*hailort-pcie-driver" | awk '{print $3}')
-                echo "[OK]   hailort-pcie-driver package installed, version: $version"
-            else
-                echo "[WARN] $module module not found, version: -1"
-            fi
         fi
+    else
+        # Fallback check for the package if neither module is found
+        if dpkg -l 2>/dev/null | grep -q "^ii.*hailort-pcie-driver"; then
+            version=$(dpkg -l | grep "^ii.*hailort-pcie-driver" | awk '{print $3}')
+            echo "[OK]   hailort-pcie-driver package installed, version: $version"
+        else
+            echo "[WARN] hailo_pci/hailo1x_pci module not found, version: -1"
+        fi
+    fi
 
-        # Always echo the version key=value for downstream parsing
+    # Always echo the version key=value for downstream parsing
+    if [[ -z "$module" ]]; then
+        echo "hailo_pci_unified=$version"
+    else
         echo "$module=$version"
-    done
+    fi
 }
 
 # Check for hailort installation

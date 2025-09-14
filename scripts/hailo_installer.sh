@@ -37,7 +37,7 @@ TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"
 
 
 # Defaults (can be overridden by flags)
-HW_ARCHITECTURE="H8"               # H8 | H10
+HW_ARCHITECTURE=""               # H8 | H10
 VENV_NAME="hailo_venv"
 DOWNLOAD_ONLY="false"
 OUTPUT_DIR_BASE="packages"
@@ -149,7 +149,13 @@ install_file() {
   if [[ "$file" == *.deb ]]; then
     sudo dpkg -i "$path"
   elif [[ "$file" == *.whl ]]; then
-    python3 -m pip install "$path"
+    if python3 -c "import site; import os; print(os.access(site.getsitepackages()[0], os.W_OK))" 2>/dev/null | grep -q "True"; then
+      echo "Installing system-wide (writable site-packages)"
+      python3 -m pip install "$path" --break-system-packages
+    else
+      echo "Installing with --user flag (user site-packages)"
+      python3 -m pip install "$path" --user --break-system-packages 
+    fi
   else
     echo "Unknown file type: $file"
   fi
@@ -157,6 +163,11 @@ install_file() {
 
 # -------- System info / tags --------
 ARCH="$(uname -m)"
+KERNEL="$(uname -r)"
+
+if [[ "$ARCH" == "aarch64" && "$KERNEL" == *"rpi"* ]]; then
+    ARCH="rpi"
+fi
 echo "Detected architecture: $ARCH"
 
 # Raspberry Pi detection (same behavior as before, but skip entirely if download-only)
@@ -246,6 +257,17 @@ case "$ARCH" in
     echo "Configuring ARM64 package names..."
     ARCH_FILES+=("hailort_${HAILORT_VERSION}_arm64.deb")
     ARCH_FILES+=("hailo-tappas-core_${TAPPAS_CORE_VERSION}_arm64.deb")
+    ARCH_FILES+=("hailort-${HAILORT_VERSION}-${PY_TAG}-linux_aarch64.whl")
+    ;;
+  rpi)
+    echo "Configuring rpi  package names..."
+    ARCH_FILES+=("hailort_${HAILORT_VERSION}_arm64.deb")
+    if [[ "${TAPPAS_CORE_VERSION}" == "5.0.0" ]]; then
+      # Special-case naming for 5.0.0
+      ARCH_FILES+=("hailo-tappas-core-5.0.0v_5.0.0_arm64.deb")
+    else
+      ARCH_FILES+=("hailo-tappas-core_${TAPPAS_CORE_VERSION}_arm64.deb")
+    fi
     ARCH_FILES+=("hailort-${HAILORT_VERSION}-${PY_TAG}-linux_aarch64.whl")
     ;;
   *)
