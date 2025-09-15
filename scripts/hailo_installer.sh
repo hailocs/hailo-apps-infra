@@ -32,15 +32,15 @@ TAPPAS_CORE_VERSION_H8="5.0.0"
 HAILORT_VERSION_H10="5.0.0"
 TAPPAS_CORE_VERSION_H10="5.0.0"
 
-HAILORT_VERSION="$HAILORT_VERSION_H8"
-TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"
+HAILORT_VERSION=""
+TAPPAS_CORE_VERSION=""
 
 
 # Defaults (can be overridden by flags)
-HW_ARCHITECTURE=""               # H8 | H10
+HW_ARCHITECTURE=""               # hailo8 | hailo10
 VENV_NAME="hailo_venv"
 DOWNLOAD_ONLY="false"
-OUTPUT_DIR_BASE="packages"
+OUTPUT_DIR_BASE="/usr/local/hailo/resources/packages"
 
 PY_TAG_OVERRIDE=""
 
@@ -52,7 +52,7 @@ Options:
   --hailort-version=VER           Override HailoRT version
   --tappas-core-version=VER       Override TAPPAS Core version
   --venv-name=NAME                Virtualenv name (install mode only) [default: $VENV_NAME]
-  --hw-arch=H8|H10        Target hardware (affects version defaults & folder) [default: $HW_ARCHITECTURE]
+  --hw-arch=hailo8|hailo10        Target hardware (affects version defaults & folder) [default: $HW_ARCHITECTURE]
   --download-only                 Only download packages, do NOT install
   --output-dir=DIR                Base output directory for downloads [default: $OUTPUT_DIR_BASE]
   --py-tag=TAG                    Wheel tag (e.g. cp311-cp311). Useful with --download-only
@@ -76,14 +76,14 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --hw-arch=*)
             HW_ARCHITECTURE="${1#*=}"
-            if [[ "$HW_ARCHITECTURE" != "H8" && "$HW_ARCHITECTURE" != "H10" ]]; then
-                echo "Invalid hardware architecture specified. Use 'H8' or 'H10'."
+            if [[ "$HW_ARCHITECTURE" != "hailo8" && "$HW_ARCHITECTURE" != "hailo10" ]]; then
+                echo "Invalid hardware architecture specified. Use 'hailo8' or 'hailo10'."
                 exit 1
             fi
-            if [[ "$HW_ARCHITECTURE" == "H8" ]]; then
+            if [[ "$HW_ARCHITECTURE" == "hailo8" ]]; then
                 HAILORT_VERSION="$HAILORT_VERSION_H8"
                 TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"
-            elif [[ "$HW_ARCHITECTURE" == "H10" ]]; then
+            elif [[ "$HW_ARCHITECTURE" == "hailo10" ]]; then
                 HAILORT_VERSION="$HAILORT_VERSION_H10"
                 TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H10"
             fi
@@ -115,7 +115,7 @@ mkdir -p "$TARGET_DIR"
 echo "Download target directory: $TARGET_DIR"
 HW_NAME=""
 # Determine hardware name based on architecture
-if [[ "$HW_ARCHITECTURE" == "H8" ]]; then
+if [[ "$HW_ARCHITECTURE" == "hailo8" ]]; then
   HW_NAME="Hailo8"
 else
   HW_NAME="Hailo10"

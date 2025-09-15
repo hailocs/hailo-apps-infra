@@ -7,25 +7,33 @@ set -euo pipefail
 # Presets for H8/H10; overrideable via flags.
 # ------------------------------------------------------------------------------
 
-# Defaults (server snapshots)
-BASE_URL_DEFAULT="http://dev-public.hailo.ai/2025-07"   # latest snapshot you referenced
-BASE_URL="$BASE_URL_DEFAULT"
+# Base URL of the deb server
+BASE_URL="http://dev-public.hailo.ai/2025-07"
 
-# Version presets (adjust here when bumping)
-H8_HAILORT_VERSION="4.22.0"
-H8_TAPPAS_VERSION="5.0.0"
-H10_HAILORT_VERSION="5.0.0"
-H10_TAPPAS_VERSION="5.0.0"
+# Default version numbers for packages (if using --version, you can adjust these)
 
-# Effective versions (can be overridden by flags)
+HAILORT_VERSION_H8="4.22.0"
+TAPPAS_CORE_VERSION_H8="5.0.0"
+HAILORT_VERSION_H10="5.0.0"
+TAPPAS_CORE_VERSION_H10="5.0.0"
+
 HAILORT_VERSION=""
 TAPPAS_CORE_VERSION=""
 
 # Behavior flags
-HW_ARCHITECTURE="H8"          # H8 | H10  (affects defaults if versions not passed)
-DOWNLOAD_DIR="/usr/local/hailo/resources/deb_whl_packages"
+HW_ARCHITECTURE=""          # hailo88 | hailo10 (affects defaults if versions not passed)
+DOWNLOAD_DIR="/usr/local/hailo/resources/packages"
 DOWNLOAD_ONLY=false
 QUIET=false
+
+INSTALL_HAILORT=false
+INSTALL_TAPPAS=false
+
+# Pip flag presets
+PIP_SYS_FLAGS=(--break-system-packages --disable-pip-version-check --no-input --prefer-binary)
+PIP_USER_FLAGS=(--user --break-system-packages --disable-pip-version-check --no-input --prefer-binary)
+PIP_VENV_FLAGS=(--disable-pip-version-check --no-input --prefer-binary)
+
 
 usage() {
   cat <<EOF
@@ -35,7 +43,7 @@ Options:
   --arch=(H8|H10)                Choose hardware preset for default versions (default: H8)
   --hailort-version=VER          Force a specific HailoRT wheel version (overrides preset)
   --tappas-core-version=VER      Force a specific TAPPAS core wheel version (overrides preset)
-  --base-url=URL                 Override base URL (default: ${BASE_URL_DEFAULT})
+  --base-url=URL                 Override base URL (default: ${BASE_URL})
   --download-dir=DIR             Where to place wheels (default: ${DOWNLOAD_DIR})
   --download-only                Only download wheels; do not install
   -q, --quiet                    Less output
@@ -52,11 +60,15 @@ log() { $QUIET || echo -e "$*"; }
 # -------------------- Parse flags --------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --arch=*)
+    --hw-arch=*)
       HW_ARCHITECTURE="${1#*=}"
-      [[ "$HW_ARCHITECTURE" =~ ^(H8|H10)$ ]] || { echo "Invalid --arch: $HW_ARCHITECTURE"; exit 1; }
+      if [[ "$HW_ARCHITECTURE" != "hailo8" && "$HW_ARCHITECTURE" != "hailo10" ]]; then
+          echo "Invalid hardware architecture specified. Use 'hailo8' or 'hailo10'."
+          exit 1
+      fi
       shift
       ;;
+
     --hailort-version=*)
       HAILORT_VERSION="${1#*=}"
       shift
@@ -81,6 +93,11 @@ while [[ $# -gt 0 ]]; do
       QUIET=true
       shift
       ;;
+    -d | --default)
+      INSTALL_HAILORT=true
+      INSTALL_TAPPAS=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -93,20 +110,25 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# -------------------- Resolve preset versions if missing --------------------
-if [[ -z "$HAILORT_VERSION" || -z "$TAPPAS_CORE_VERSION" ]]; then
-  if [[ "$HW_ARCHITECTURE" == "H10" ]]; then
-    : "${HAILORT_VERSION:=$H10_HAILORT_VERSION}"
-    : "${TAPPAS_CORE_VERSION:=$H10_TAPPAS_VERSION}"
-  else
-    : "${HAILORT_VERSION:=$H8_HAILORT_VERSION}"
-    : "${TAPPAS_CORE_VERSION:=$H8_TAPPAS_VERSION}"
-  fi
+# -------------------- Set versions based on hardware architecture if not already specified --------------------
+if [[ -z ${HAILORT_VERSION+x} || -z "$HAILORT_VERSION" ]]; then
+  case "$HW_ARCHITECTURE" in
+    hailo8)  HAILORT_VERSION="$HAILORT_VERSION_H8"  ;;
+    hailo10) HAILORT_VERSION="$HAILORT_VERSION_H10" ;;
+  esac
 fi
 
+if [[ -z ${TAPPAS_CORE_VERSION+x} || -z "$TAPPAS_CORE_VERSION" ]]; then
+  case "$HW_ARCHITECTURE" in
+    hailo8)  TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H8"  ;;
+    hailo10) TAPPAS_CORE_VERSION="$TAPPAS_CORE_VERSION_H10" ;;
+  esac
+fi
+
+
+
 # If user specified only one version, we install only that one.
-INSTALL_HAILORT=false
-INSTALL_TAPPAS=false
+
 [[ -n "$HAILORT_VERSION" ]] && INSTALL_HAILORT=true
 [[ -n "$TAPPAS_CORE_VERSION" ]] && INSTALL_TAPPAS=true
 
@@ -114,6 +136,18 @@ if [[ "$INSTALL_HAILORT" == false && "$INSTALL_TAPPAS" == false ]]; then
   log "Nothing to do (no versions requested)."
   exit 0
 fi
+
+HW_FOLDER_NAME=""
+# Determine hardware name based on architecture
+if [[ "$HW_ARCHITECTURE" == "hailo8" ]]; then
+  HW_FOLDER_NAME="Hailo8"
+  HW_FOLDER_SECONDARY="Hailo10"
+else
+  HW_FOLDER_NAME="Hailo10"
+  HW_FOLDER_SECONDARY="Hailo8"
+fi
+
+
 
 # -------------------- Compute tags --------------------
 PY_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
@@ -131,9 +165,19 @@ case "$UNAME_M" in
     ;;
 esac
 
-mkdir -p "$DOWNLOAD_DIR"
+if [[ -e "$DOWNLOAD_DIR" ]]; then
+  if [[ ! -d "$DOWNLOAD_DIR" ]]; then
+    echo "Error: $DOWNLOAD_DIR exists and is not a directory."
+    exit 1
+  else
+    echo "Directory $DOWNLOAD_DIR already exists."
+  fi
+else
+  echo "Creating download directory: $DOWNLOAD_DIR"
+  mkdir -p "$DOWNLOAD_DIR"
+fi
 
-log "→ BASE_URL            = $BASE_URL"
+log "→ BASE_URL            = $BASE_URL" 
 log "→ ARCH preset         = $HW_ARCHITECTURE"
 log "→ Python tag          = $PY_TAG"
 log "→ Wheel arch tag      = $ARCH_TAG"
@@ -157,17 +201,80 @@ fetch() {
     wget -q --tries=3 --timeout=20 -O "$out" "$url"
   fi
 }
+is_venv() {
+  # True for venv/virtualenv/conda (prefix differs) or real_prefix set
+  python3 - "$@" <<'PY'
+import sys
+print("1" if (getattr(sys, "real_prefix", None) or sys.prefix != sys.base_prefix) else "0")
+PY
+}
+
+site_writable() {
+  # True if system site-packages dir is writable
+  python3 - "$@" <<'PY'
+import os, site, sys
+try:
+    paths = site.getsitepackages()
+except Exception:
+    # Fallback (rare, but just in case)
+    paths = [sys.prefix + "/lib/python%s.%s/site-packages" % sys.version_info[:2]]
+print("1" if (paths and os.access(paths[0], os.W_OK)) else "0")
+PY
+}
+
+install_pip_package() {
+  local package_path="$1"
+
+  # Detect venv
+  local in_venv
+  in_venv="$(python3 - <<'PY'
+import sys
+print("1" if (getattr(sys, "real_prefix", None) or sys.prefix != sys.base_prefix) else "0")
+PY
+)"
+
+  if [[ "$in_venv" == "1" ]]; then
+    echo "Installing into active virtual environment"
+    python3 -m pip install "${PIP_VENV_FLAGS[@]}" --upgrade -- "$package_path"
+  elif [[ "$(site_writable)" == "1" ]]; then
+    echo "Installing system-wide"
+    python3 -m pip install "${PIP_SYS_FLAGS[@]}" --upgrade -- "$package_path"
+  else
+    echo "Installing with --user (+ --break-system-packages)"
+    python3 -m pip install "${PIP_USER_FLAGS[@]}" --upgrade -- "$package_path"
+  fi
+}
+
 
 # -------------------- Download wheels --------------------
+HW_FOLDER_NAME=""
+# Determine hardware name based on architecture
+if [[ "$HW_ARCHITECTURE" == "hailo8" ]]; then
+  HW_FOLDER_NAME="Hailo8"
+  HW_FOLDER_SECONDARY="Hailo10"
+else
+  HW_FOLDER_NAME="Hailo10"
+  HW_FOLDER_SECONDARY="Hailo8"
+fi
+
 if [[ "$INSTALL_TAPPAS" == true ]]; then
-  TAPPAS_FILE="tappas_core_python_binding-${TAPPAS_CORE_VERSION}-py3-none-any.whl"
-  TAPPAS_URL="${BASE_URL}/${TAPPAS_FILE}"
-  fetch "$TAPPAS_URL" "${DOWNLOAD_DIR}/${TAPPAS_FILE}"
+
+  TAPPAS_FILE="hailo_tappas_core_python_binding-${TAPPAS_CORE_VERSION}-py3-none-any.whl"
+  TAPPAS_URL="${BASE_URL}/${HW_FOLDER_NAME}/${TAPPAS_FILE}"
+
+  if ! fetch "$TAPPAS_URL" "${DOWNLOAD_DIR}/${TAPPAS_FILE}"; then
+    echo "Failed from primary ($HW_FOLDER_NAME). Trying secondary: ${HW_FOLDER_SECONDARY}"
+    TAPPAS_URL="${BASE_URL}/${HW_FOLDER_SECONDARY}/${TAPPAS_FILE}"
+    if ! fetch "$TAPPAS_URL" "${DOWNLOAD_DIR}/${TAPPAS_FILE}"; then
+      echo "Failed from both primary and secondary folders. Check URL(s) and network."
+      exit 1
+    fi
+  fi
 fi
 
 if [[ "$INSTALL_HAILORT" == true ]]; then
   HAILORT_FILE="hailort-${HAILORT_VERSION}-${PY_TAG}-${ARCH_TAG}.whl"
-  HAILORT_URL="${BASE_URL}/${HAILORT_FILE}"
+  HAILORT_URL="${BASE_URL}/${HW_FOLDER_NAME}/${HAILORT_FILE}"
   fetch "$HAILORT_URL" "${DOWNLOAD_DIR}/${HAILORT_FILE}"
 fi
 
@@ -178,16 +285,28 @@ fi
 
 # -------------------- Install into current environment --------------------
 log "→ Upgrading pip / wheel / setuptools…"
-python3 -m pip install --upgrade pip setuptools wheel >/dev/null
+
+log "→ Upgrading pip / wheel / setuptools…"
+if [[ "$(is_venv)" == "1" ]]; then
+  echo "Upgrading in virtual environment"
+  python3 -m pip install "${PIP_VENV_FLAGS[@]}" --upgrade pip setuptools wheel >/dev/null
+elif [[ "$(site_writable)" == "1" ]]; then
+  echo "Upgrading system-wide"
+  python3 -m pip install "${PIP_SYS_FLAGS[@]}" --upgrade pip setuptools wheel >/dev/null
+else
+  echo "Upgrading with --user (+ --break-system-packages)"
+  python3 -m pip install "${PIP_USER_FLAGS[@]}" --upgrade pip setuptools wheel >/dev/null
+fi
+
 
 if [[ "$INSTALL_HAILORT" == true ]]; then
   log "→ Installing HailoRT wheel…"
-  python3 -m pip install "${DOWNLOAD_DIR}/${HAILORT_FILE}"
+  install_pip_package "${DOWNLOAD_DIR}/${HAILORT_FILE}"
 fi
 
 if [[ "$INSTALL_TAPPAS" == true ]]; then
   log "→ Installing TAPPAS core wheel…"
-  python3 -m pip install "${DOWNLOAD_DIR}/${TAPPAS_FILE}"
+  install_pip_package "${DOWNLOAD_DIR}/${TAPPAS_FILE}"
 fi
 
 log "✅ Installation complete."
