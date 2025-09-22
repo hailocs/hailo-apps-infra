@@ -17,6 +17,7 @@ static const std::string DEFAULT_YOLOV5M_OUTPUT_LAYER = "yolov5m_wo_spp_60p/yolo
 static const std::string DEFAULT_YOLOV5M_VEHICLES_OUTPUT_LAYER = "yolov5m_vehicles/yolov5_nms_postprocess";
 static const std::string DEFAULT_YOLOV8S_OUTPUT_LAYER = "yolov8s/yolov8_nms_postprocess";
 static const std::string DEFAULT_YOLOV8M_OUTPUT_LAYER = "yolov8m/yolov8_nms_postprocess";
+static const std::string DEFAULT_YOLOV8N_RELU6_LICENSE_PLATE_OUTPUT_LAYER = "yolov8n_relu6_license_plate/yolov8_nms_postprocess";
 
 #if __GNUC__ > 8
 #include <filesystem>
@@ -109,7 +110,8 @@ static std::map<uint8_t, std::string> yolo_personface = {
         {0, "unlabeled"},
         {1, "person"},
         {2, "face"}};
-
+static std::map<uint8_t, std::string> yolo_license_plate_labels = {
+    {0, "license_plate"}};
 void yolov5(HailoROIPtr roi)
 {
     if (!roi->has_tensors())
@@ -131,6 +133,75 @@ void yolov5s_nv12(HailoROIPtr roi)
     auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();
     hailo_common::add_detections(roi, detections);
 }
+void yolov8n_relu6_license_plate(HailoROIPtr roi)
+{
+    std::cout << "\n=== YOLOv8n License Plate Debug ===" << std::endl;
+
+    if (!roi->has_tensors()) {
+        std::cout << "DEBUG: ROI has no tensors." << std::endl;
+        return;
+    }
+
+    // List tensors
+    std::cout << "DEBUG: ROI tensors available:" << std::endl;
+    for (auto &tensor : roi->get_tensors()) {
+        std::cout << "   -> " << tensor->name()
+                  << " (size=" << tensor->size() << " bytes)" << std::endl;
+    }
+
+    // Get our output tensor
+    auto tensor = roi->get_tensor(DEFAULT_YOLOV8N_RELU6_LICENSE_PLATE_OUTPUT_LAYER);
+    if (!tensor) {
+        std::cerr << "ERROR: Could not find output tensor: "
+                  << DEFAULT_YOLOV8N_RELU6_LICENSE_PLATE_OUTPUT_LAYER << std::endl;
+        return;
+    }
+
+    auto fmt = tensor->format();
+    std::cout << "DEBUG: Tensor name: " << tensor->name() << std::endl;
+    std::cout << "DEBUG: Tensor size (bytes): " << tensor->size()
+              << " is_nms=" << fmt.is_nms << std::endl;
+
+    // Dump first few raw values
+    uint8_t *buffer = tensor->data();
+    size_t buf_size = tensor->size();
+    std::cout << "DEBUG: Dumping first 20 float values from tensor buffer:" << std::endl;
+    for (int i = 0; i < 20 && (i * sizeof(float)) < buf_size; i++) {
+        float val;
+        memcpy(&val, buffer + i * sizeof(float), sizeof(val));
+        std::cout << "   [" << i << "] " << val << std::endl;
+    }
+
+    // Decode
+    try {
+        auto post = HailoNMSDecode(tensor, yolo_license_plate_labels, 0.0f, 200, false);
+        auto detections = post.decode_debug<float32_t, common::hailo_bbox_float32_t>();
+
+        std::cout << "DEBUG: Total decoded detections = " << detections.size() << std::endl;
+        for (size_t i = 0; i < detections.size(); i++) {
+            auto &det = detections[i];
+            auto bbox = det.get_bbox();
+            std::cout << "   Detection[" << i << "] "
+                      << "label=" << det.get_label()
+                      << " conf=" << det.get_confidence()
+                      << " bbox=(" << bbox.xmin() << ","
+                                   << bbox.ymin() << ","
+                                   << bbox.width() << ","
+                                   << bbox.height() << ")"
+                      << std::endl;
+        }
+
+        hailo_common::add_detections(roi, detections);
+        std::cout << "DEBUG: Added detections into ROI." << std::endl;
+    }
+    catch (const std::exception &e) {
+        std::cerr << "ERROR: Exception during NMS decode: " << e.what() << std::endl;
+    }
+
+    std::cout << "=== End of YOLOv8n License Plate Debug ===\n" << std::endl;
+}
+
+
 
 void yolov8s(HailoROIPtr roi)
 {

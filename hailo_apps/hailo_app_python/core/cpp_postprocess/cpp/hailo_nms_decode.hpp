@@ -155,4 +155,53 @@ public:
         }
         return _objects;
     }
+
+    template <typename T, typename BBoxType>
+    std::vector<HailoDetection> decode_debug()
+    {
+        if (!_nms_output_tensor)
+            return {};
+
+        std::vector<HailoDetection> _objects;
+        _objects.reserve(_max_boxes);
+
+        hailo_tensor_nms_shape_t nms_shape = _nms_output_tensor->nms_shape();
+        uint32_t max_bboxes_per_class = nms_shape.max_bboxes_per_class;
+        uint32_t num_of_classes = nms_shape.number_of_classes;
+
+        std::cout << "DEBUG: NMS decode -> classes=" << num_of_classes
+                << " max_bboxes_per_class=" << max_bboxes_per_class << std::endl;
+
+        size_t buffer_offset = 0;
+        uint8_t *buffer = _nms_output_tensor->data();
+
+        for (size_t class_id = 0; class_id < num_of_classes; class_id++) {
+            float32_t bbox_count = 0;
+            memcpy(&bbox_count, buffer + buffer_offset, sizeof(bbox_count));
+            buffer_offset += sizeof(bbox_count);
+
+            std::cout << "DEBUG: class_id=" << class_id
+                    << " bbox_count=" << bbox_count << std::endl;
+
+            if (bbox_count == 0) continue;
+            if (bbox_count > max_bboxes_per_class) {
+                std::cerr << "ERROR: Too many boxes for class " << class_id << std::endl;
+                break;
+            }
+
+            for (size_t bbox_index = 0; bbox_index < static_cast<uint32_t>(bbox_count); bbox_index++) {
+                BBoxType *bbox_struct = (BBoxType *)(&buffer[buffer_offset]);
+                std::cout << "   -> raw bbox[" << bbox_index << "]: "
+                        << bbox_struct->x_min << "," << bbox_struct->y_min << ","
+                        << bbox_struct->x_max << "," << bbox_struct->y_max << ","
+                        << bbox_struct->score << std::endl;
+
+                parse_bbox_to_detection_object(*bbox_struct, class_id + 1, _objects);
+                buffer_offset += sizeof(BBoxType);
+            }
+        }
+
+        return _objects;
+    }
+
 };

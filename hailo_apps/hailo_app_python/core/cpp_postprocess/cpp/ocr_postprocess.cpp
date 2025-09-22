@@ -5,6 +5,7 @@
 #include <cmath>  
 #include <fstream>  
 #include <algorithm>  
+#include <numeric>  
 #include <stdexcept>  
 #include <iostream>  
   

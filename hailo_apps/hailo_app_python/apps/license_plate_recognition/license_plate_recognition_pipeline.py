@@ -66,7 +66,7 @@ from hailo_apps.hailo_app_python.core.common.defines import (
 
     # Croppers / overlays / sinks 
     LPR_OVERLAY_SO,
-    LPR_CROPPERS_SO,                       
+    LPR_CROPPER_SO,                       
     LPR_OCRSINK_SO,                        
     LPR_QUALITY_ESTIMATION_FUNCTION_NAME,  
     LPR_VEHICLE_CROPPER_FUNCTION
@@ -83,7 +83,7 @@ class GStreamerLPRApp(GStreamerApp):
         parser.add_argument(
             "--pipeline",
             default="simple",
-            help="The pipeline variant: 'simple' or 'complex'",
+            help="The pipeline variant: 'simple', 'det_only', 'two_stage_basic', 'lp_only', or 'complex'",
         )
         super().__init__(parser, user_data)
 
@@ -149,7 +149,7 @@ class GStreamerLPRApp(GStreamerApp):
             LPR_PIPELINE, RESOURCES_SO_DIR_NAME, LPR_OCRSINK_SO
         )
         self.lpr_croppers_so = get_resource_path(
-            LPR_PIPELINE, RESOURCES_SO_DIR_NAME, LPR_CROPPERS_SO
+            LPR_PIPELINE, RESOURCES_SO_DIR_NAME, LPR_CROPPER_SO
         )
         self.lpr_quality_est_function = LPR_QUALITY_ESTIMATION_FUNCTION_NAME
 
@@ -169,6 +169,10 @@ class GStreamerLPRApp(GStreamerApp):
             f"output-format-type=HAILO_FORMAT_TYPE_FLOAT32"
         )
 
+
+        self.video_width = 640
+        self.video_height = 640
+
         # Set process title
         setproctitle.setproctitle(LPR_APP_TITLE)
         hailo_logger.debug("Process title set to %s", LPR_APP_TITLE)
@@ -178,7 +182,18 @@ class GStreamerLPRApp(GStreamerApp):
 
     def get_pipeline_string(self):
         if self.pipeline_type == "simple":
+            print("Getting simple pipeline string")
             return self.get_pipeline_string_simple()
+        if self.pipeline_type == "det_only":
+            print("Getting det_only pipeline string")
+            return self.get_pipeline_string_det_only()
+        if self.pipeline_type == "two_stage_basic":
+            print("Getting two_stage_basic pipeline string")
+            return self.get_pipeline_string_two_stage_basic()
+        if self.pipeline_type == "lp_only":
+            print("Getting lp_only pipeline string")
+            return self.get_pipeline_string_lp_only()
+        print("Getting complex pipeline string")
         return self.get_pipeline_string_complex()
 
     def get_pipeline_string_simple(self):
@@ -219,6 +234,7 @@ class GStreamerLPRApp(GStreamerApp):
             post_process_so=self.license_det_post_process_so,
             post_function_name=self.license_det_post_function_name,
             config_json=self.license_json,
+            additional_params=self.thresholds_str,
             name="plate_detection",
         )
 
@@ -254,20 +270,14 @@ class GStreamerLPRApp(GStreamerApp):
             f"tee name=context_tee "
 
             # Display branch with overlay
-            f"context_tee. ! queue ! "
-            f"videobox top=1 bottom=1 ! queue ! "
-            f"hailooverlay line-thickness=3 font-thickness=1 qos=false ! "
-            f"hailofilter use-gst-buffer=true "
-            f"so-path={self.lpr_overlay_so} "
-            f"qos=false ! "
-            f"videoconvert ! fpsdisplaysink video-sink=ximagesink text-overlay=false "
-            f"name=hailo_display sync=true "
+            f"context_tee. ! {display_pipeline} "
 
             # Processing branch: crop -> OCR -> sink
             f"context_tee. ! {vehicle_cropper} ! "
+            f"tee name=vehicle_cropper_tee "
             f"hailoaggregator name=agg2 "
-            f"vehicle_cropper. ! queue ! agg2. "
-            f"vehicle_cropper. ! queue ! {ocr_detection} ! queue ! agg2. "
+            f"vehicle_cropper_tee. ! queue ! agg2.sink_0 "
+            f"vehicle_cropper_tee. ! queue ! {ocr_detection} ! queue ! agg2.sink_1 "
             f"agg2. ! queue ! "
             f"identity name=identity_callback ! "
             f"hailofilter use-gst-buffer=true "
@@ -275,6 +285,183 @@ class GStreamerLPRApp(GStreamerApp):
             f"qos=false ! "
             f"fakesink sync=false async=false"
         )
+        print(pipeline_string)
+        return pipeline_string
+
+    def get_pipeline_string_two_stage_basic(self):
+        # 1) Source
+        source_pipeline = SOURCE_PIPELINE(
+            video_source=self.video_source,
+            video_width=self.video_width,
+            video_height=self.video_height,
+            frame_rate=self.frame_rate,
+            sync=self.sync,
+        )
+
+        # 2) Vehicle detection
+        vehicle_detection = INFERENCE_PIPELINE(
+            hef_path=self.vehicle_hef_path,
+            post_process_so=self.vehicle_post_process_so,
+            post_function_name=self.vehicle_post_function_name,
+            config_json=self.vehicle_json,
+            additional_params=self.thresholds_str,
+            name="vehicle_detection",
+        )
+        vehicle_detection_wrapper = INFERENCE_PIPELINE_WRAPPER(vehicle_detection)
+
+        # 3) Optional tracking to stabilize vehicle boxes
+        tracker_pipeline = TRACKER_PIPELINE(
+            class_id=-1,
+            kalman_dist_thr=0.5,
+            iou_thr=0.6,
+            keep_tracked_frames=2,
+            keep_lost_frames=2,
+            keep_past_metadata=True,
+            name="hailo_tracker",
+        )
+
+        # 4) License plate detection inner pipeline
+        plate_detection = INFERENCE_PIPELINE(
+            hef_path=self.license_det_hef_path,
+            post_process_so=self.license_det_post_process_so,
+            post_function_name=self.license_det_post_function_name,
+            config_json=self.license_json,
+            name="plate_detection",
+        )
+
+        # 5) Crop vehicle ROIs and run LP detection on them
+        vehicle_cropper = CROPPER_PIPELINE(
+            inner_pipeline=plate_detection,
+            so_path=self.lpr_croppers_so,
+            function_name=self.vehicle_cropper_function,
+            internal_offset=True,
+            name="vehicle_cropper",
+        )
+
+        # 6) Basic display with standard overlay only
+        display_pipeline = DISPLAY_PIPELINE(
+            video_sink=self.video_sink,
+            sync=self.sync,
+            show_fps=self.show_fps,
+        )
+
+        pipeline_string = (
+            f"{source_pipeline} ! "
+            f"{vehicle_detection_wrapper} ! "
+            f"{tracker_pipeline} ! "
+            f"{vehicle_cropper} ! "
+            f"{display_pipeline}"
+        )
+
+        print(pipeline_string)
+        return pipeline_string
+
+    def get_pipeline_string_det_only(self):
+        # 1) Source
+        source_pipeline = SOURCE_PIPELINE(
+            video_source=self.video_source,
+            video_width=self.video_width,
+            video_height=self.video_height,
+            frame_rate=self.frame_rate,
+            sync=self.sync,
+        )
+
+        # 2) Vehicle detection
+        vehicle_detection = INFERENCE_PIPELINE(
+            hef_path=self.vehicle_hef_path,
+            post_process_so=self.vehicle_post_process_so,
+            post_function_name=self.vehicle_post_function_name,
+            config_json=self.vehicle_json,
+            additional_params=self.thresholds_str,
+            name="vehicle_detection",
+        )
+        vehicle_detection_wrapper = INFERENCE_PIPELINE_WRAPPER(vehicle_detection)
+
+        # 3) Tracking (optional but useful to stabilize boxes)
+        tracker_pipeline = TRACKER_PIPELINE(
+            class_id=-1,
+            kalman_dist_thr=0.5,
+            iou_thr=0.6,
+            keep_tracked_frames=2,
+            keep_lost_frames=2,
+            keep_past_metadata=True,
+            name="hailo_tracker",
+        )
+
+        # 4) Plate detection (inner pipe for cropper)
+        plate_detection = INFERENCE_PIPELINE(
+            hef_path=self.license_det_hef_path,
+            post_process_so=self.license_det_post_process_so,
+            post_function_name=self.license_det_post_function_name,
+            config_json=self.license_json,
+            name="plate_detection",
+        )
+
+        # 5) Vehicle cropper w/ plate detection
+        vehicle_cropper = CROPPER_PIPELINE(
+            inner_pipeline=plate_detection,
+            so_path=self.lpr_croppers_so,
+            function_name=self.vehicle_cropper_function,
+            internal_offset=True,
+            name="vehicle_cropper",
+        )
+
+        # 6) Display (overlay both vehicles and LP detections) with LPR overlay SO
+        display_with_lpr_overlay = (
+            f"{QUEUE('hailo_display_overlay_q')} ! "
+            f"hailooverlay name=hailo_display_overlay  ! "
+            f"{QUEUE('hailo_display_videoconvert_q')} ! "
+            f"videoconvert name=hailo_display_videoconvert n-threads=2 qos=false ! "
+            f"hailofilter use-gst-buffer=true so-path={self.lpr_overlay_so} qos=false ! "
+            f"{QUEUE('hailo_display_q')} ! "
+            f"fpsdisplaysink name=hailo_display video-sink={self.video_sink} sync={'false' if not self.sync else 'true'} text-overlay={'True' if self.show_fps else 'False'} signal-fps-measurements=true "
+        )
+
+        # Full graph: source -> vehicle det -> tracker -> vehicle cropper (LP det) -> display
+        pipeline_string = (
+            f"{source_pipeline} ! "
+            f"{vehicle_detection_wrapper} ! "
+            f"{tracker_pipeline} ! "
+            f"{vehicle_cropper} ! "
+            f"{display_with_lpr_overlay}"
+        )
+
+        print(pipeline_string)
+        return pipeline_string
+
+    def get_pipeline_string_lp_only(self):
+        # 1) Source
+        source_pipeline = SOURCE_PIPELINE(
+            video_source=self.video_source,
+            video_width=self.video_width,
+            video_height=self.video_height,
+            frame_rate=self.frame_rate,
+            sync=self.sync,
+        )
+
+        # 2) License plate detection on full frame
+        plate_detection = INFERENCE_PIPELINE(
+            hef_path=self.license_det_hef_path,
+            post_process_so=self.license_det_post_process_so,
+            post_function_name="yolov8n_relu6_license_plate",
+            config_json=self.license_json,
+            name="plate_detection",
+        )
+        plate_detection_wrapper = INFERENCE_PIPELINE_WRAPPER(plate_detection)
+
+        # 3) Display with standard overlay
+        display_pipeline = DISPLAY_PIPELINE(
+            video_sink=self.video_sink,
+            sync=self.sync,
+            show_fps=self.show_fps,
+        )
+
+        pipeline_string = (
+            f"{source_pipeline} ! "
+            f"{plate_detection_wrapper} ! "
+            f"{display_pipeline}"
+        )
+
         print(pipeline_string)
         return pipeline_string
 
