@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -54,9 +54,9 @@ DESCRIPTION:
 
 REQUIREMENTS:
     - Hailo PCI driver must be installed
-    - HailoRT must be installed  
+    - HailoRT must be installed
     - TAPPAS core must be installed
-    
+
     Use 'sudo ./scripts/hailo_installer.sh' to install missing components.
 
 EOF
@@ -101,6 +101,7 @@ SUMMARY_LINE=$(
   sudo -u "${SUDO_USER:-$USER}" -H ./scripts/check_installed_packages.sh 2>&1 \
     | sed -n 's/^SUMMARY: //p'
 )
+echo "SUMMARY_LINE: $SUMMARY_LINE"
 
 if [[ -z "$SUMMARY_LINE" ]]; then
   echo "❌ Could not find SUMMARY line" >&2
