@@ -244,12 +244,15 @@ REID_CROPPER_POSTPROCESS_FUNCTION = 'all_detections'
 REID_POSTPROCESS_FUNCTION = 'filter'
 REID_TRACKER_UPDATE_POSTPROCESS_FUNCTION = 'filter_reid'
 REID_CLASSIFICATION_TYPE = 'reid'
+REID_MODEL_NAME_DET = 'yolov5s_personface'
+REID_MODEL_NAME_REID = 'repvgg_a0_person_reid_512'
 
 # RTSP pipeline defaults
 RTSP_APP_TITLE = "Hailo RTSP App"
 
 # TILING pipeline defaults
 TILING_APP_TITLE = "Hailo Tiling App"
+TILING_MODEL_NAME = "ssd_mobilenet_v1"
 TILING_POSTPROCESS_SO_FILENAME = "libmobilenet_ssd_postprocess.so"
 TILING_POSTPROCESS_FUNCTION = "mobilenet_ssd"
 

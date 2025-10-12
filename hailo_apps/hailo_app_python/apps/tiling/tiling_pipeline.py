@@ -1,5 +1,6 @@
 # region imports
 # Standard library imports
+import os
 import setproctitle
 
 # Third-party imports
@@ -12,7 +13,10 @@ import hailo
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path
 from hailo_apps.hailo_app_python.core.common.defines import (
-    TILING_APP_TITLE, 
+    HAILO_ARCH_KEY,
+    RESOURCES_MODELS_DIR_NAME,
+    TILING_APP_TITLE,
+    TILING_MODEL_NAME, 
     TILING_POSTPROCESS_SO_FILENAME, 
     TILING_POSTPROCESS_FUNCTION,
     RESOURCES_SO_DIR_NAME,
@@ -20,6 +24,12 @@ from hailo_apps.hailo_app_python.core.common.defines import (
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import SOURCE_PIPELINE, INFERENCE_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, TILE_CROPPER_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
 # endregion imports
+
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
+hailo_logger = get_logger(__name__)
 
 # -----------------------------------------------------------------------------------------------
 # User Gstreamer Application
@@ -38,25 +48,46 @@ class GStreamerTilingApp(GStreamerApp):
         parser.add_argument("--border_threshold", default=0.1, help="Set border threshold to Remove tile's exceeded objects. Relevant only for multi scaling. Default is 0.1")
         parser.add_argument("--single_scaling", action="store_true", help="Whether use single scaling or multi scaling. Default is multi scaling.")
         parser.add_argument("--scale_level", default=2, help="set scales (layers of tiles) in addition to the main layer [1,2,3] 1: {(1 X 1)} 2: {(1 X 1), (2 X 2)} 3: {(1 X 1), (2 X 2), (3 X 3)}. Default is 2. For singlescaling must be 0.")
+
+        hailo_logger.info("Initializing GStreamer Tiling App...")
         
         # Call the parent class constructor
         super().__init__(parser, user_data)
+
+        hailo_logger.debug(
+            "Parent GStreamerApp initialized | arch=%s | input=%s | fps=%s | sync=%s | show_fps=%s",
+            getattr(self.options_menu, "arch", None),
+            getattr(self, "video_source", None),
+            getattr(self, "frame_rate", None),
+            getattr(self, "sync", None),
+            getattr(self, "show_fps", None),
+        )
         
         if self.options_menu.single_scaling:
             self.options_menu.scale_level = 0
             self.options_menu.border_threshold = 0
 
         # Determine the architecture if not specified
-        if self.options_menu.arch is None:
-            detected_arch = detect_hailo_arch()
-            if detected_arch is None:
-                raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
-            self.arch = detected_arch
-            print(f"Auto-detected Hailo architecture: {self.arch}")
+        if self.options_menu.arch is None:    
+            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
+            if not arch:
+                hailo_logger.error("Could not detect Hailo architecture.")
+                raise ValueError(
+                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
+                )
+            self.arch = arch
+            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
         else:
             self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
-        self.hef_path = '/home/hailo/Desktop/hailo-apps-infra/resources/tiling/ssd_mobilenet_v1.hef'
+        
+
+        if self.options_menu.hef_path is not None:
+            self.hef_path = self.options_menu.hef_path
+        else:
+            self.hef_path = get_resource_path(pipeline_name=None, resource_type=RESOURCES_MODELS_DIR_NAME, model=TILING_MODEL_NAME)
+
         self.post_process_so = get_resource_path(pipeline_name=None, resource_type=RESOURCES_SO_DIR_NAME, model=TILING_POSTPROCESS_SO_FILENAME)
         self.post_function = TILING_POSTPROCESS_FUNCTION
 
@@ -105,16 +136,7 @@ class GStreamerTilingApp(GStreamerApp):
         print(pipeline_string)
         return pipeline_string
     
-def app_callback(pad, info, user_data):
-    buffer = info.get_buffer()
-    if buffer is None:
-        return Gst.PadProbeReturn.OK
-    roi = hailo.get_roi_from_buffer(buffer)
-    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
-    for detection in detections:
-        track_id = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
-        print(f'Unified callback, {roi.get_stream_id()}_{detection.get_label()}_{track_id}')
-    return Gst.PadProbeReturn.OK
+
 
 def main():
     # Create an instance of the user app callback class
