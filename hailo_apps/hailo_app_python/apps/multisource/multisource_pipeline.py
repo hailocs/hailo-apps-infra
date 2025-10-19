@@ -13,10 +13,17 @@ from gi.repository import Gst
 import hailo
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path, get_resource_path
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
-from hailo_apps.hailo_app_python.core.common.defines import TAPPAS_STREAM_ID_TOOL_SO_FILENAME, MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
+from hailo_apps.hailo_app_python.core.common.defines import HAILO_ARCH_KEY, TAPPAS_STREAM_ID_TOOL_SO_FILENAME, MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import get_source_type, USER_CALLBACK_PIPELINE, TRACKER_PIPELINE, QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, DISPLAY_PIPELINE
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
 # endregion imports
+
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+
+hailo_logger = get_logger(__name__)
+
 
 # User Gstreamer Application: This class inherits from the common.GStreamerApp class
 class GStreamerMultisourceApp(GStreamerApp):
@@ -31,13 +38,18 @@ class GStreamerMultisourceApp(GStreamerApp):
         super().__init__(parser, user_data)  # Call the parent class constructor
 
         # Determine the architecture if not specified
-        if self.options_menu.arch is None:
-            detected_arch = detect_hailo_arch()
-            if detected_arch is None:
-                raise ValueError('Could not auto-detect Hailo architecture. Please specify --arch manually.')
-            self.arch = detected_arch
+        if self.options_menu.arch is None:    
+            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
+            if not arch:
+                hailo_logger.error("Could not detect Hailo architecture.")
+                raise ValueError(
+                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
+                )
+            self.arch = arch
+            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
         else:
             self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
         setproctitle.setproctitle(MULTI_SOURCE_APP_TITLE)  # Set the process title
 
@@ -116,20 +128,10 @@ class GStreamerMultisourceApp(GStreamerApp):
             callback_function = getattr(self, f'src_{id}_callback', None)
             identity_pad.add_probe(Gst.PadProbeType.BUFFER, callback_function, self.user_data)
 
-def app_callback(pad, info, user_data):
-    buffer = info.get_buffer()
-    if buffer is None:
-        return Gst.PadProbeReturn.OK
-    roi = hailo.get_roi_from_buffer(buffer)
-    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
-    for detection in detections:
-        track_id = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
-        print(f'Unified callback, {roi.get_stream_id()}_{detection.get_label()}_{track_id}')
-    return Gst.PadProbeReturn.OK
-
 def main():
     # Create an instance of the user app callback class
     user_data = app_callback_class()
+    app_callback = dummy_callback
     app = GStreamerMultisourceApp(app_callback, user_data)
     app.run()
 

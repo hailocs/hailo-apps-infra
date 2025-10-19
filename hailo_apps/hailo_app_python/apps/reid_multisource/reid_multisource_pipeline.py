@@ -18,8 +18,11 @@ from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get
 from hailo_apps.hailo_app_python.core.common.db_handler import DatabaseHandler, Record
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.hailo_app_python.core.common.defines import (
-    FACE_DETECTION_JSON_NAME, 
-    REID_CLASSIFICATION_TYPE, 
+    FACE_DETECTION_JSON_NAME,
+    HAILO_ARCH_KEY, 
+    REID_CLASSIFICATION_TYPE,
+    REID_MODEL_NAME_DET,
+    REID_MODEL_NAME_REID, 
     TRACKER_UPDATE_POSTPROCESS_SO_FILENAME, 
     REID_TRACKER_UPDATE_POSTPROCESS_FUNCTION, 
     TAPPAS_STREAM_ID_TOOL_SO_FILENAME, 
@@ -51,10 +54,16 @@ from hailo_apps.hailo_app_python.core.common.defines import (
 )
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import get_source_type, TRACKER_PIPELINE, CROPPER_PIPELINE, INFERENCE_PIPELINE_WRAPPER, USER_CALLBACK_PIPELINE, QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, DISPLAY_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class
+
+
+# Logger
+from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
+hailo_logger = get_logger(__name__)
+
 # endregion imports
 
 # User Gstreamer Application: This class inherits from the common.GStreamerApp class
-class GStreamerMultisourceApp(GStreamerApp):
+class GStreamerReidMultisourceApp(GStreamerApp):
     def __init__(self, app_callback, user_data, parser=None):
         
         if parser == None:
@@ -66,19 +75,26 @@ class GStreamerMultisourceApp(GStreamerApp):
 
         super().__init__(parser, user_data)  # Call the parent class constructor
 
-        if self.options_menu.arch is None:  # Determine the architecture if not specified
-            detected_arch = detect_hailo_arch()
-            if detected_arch is None:
-                raise ValueError('Could not auto-detect Hailo architecture. Please specify --arch manually.')
-            self.arch = detected_arch
+        # Determine the architecture if not specified
+        if self.options_menu.arch is None:    
+            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
+            if not arch:
+                hailo_logger.error("Could not detect Hailo architecture.")
+                raise ValueError(
+                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
+                )
+            self.arch = arch
+            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
         else:
             self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
         setproctitle.setproctitle(REID_MULTISOURCE_APP_TITLE)  # Set the process title
 
         # hef paths
-        self.hef_path_yolo_detection = '/home/hailo/Desktop/hailo-apps-infra/resources/reid_multisource/yolov5s_personface.hef'
-        self.hef_path_repvgg_reid = '/home/hailo/Desktop/hailo-apps-infra/resources/reid_multisource/repvgg_a0_person_reid_512.hef'
+        self.hef_path_yolo_detection = get_resource_path(pipeline_name=None, resource_type=RESOURCES_MODELS_DIR_NAME,model=REID_MODEL_NAME_DET)
+        self.hef_path_repvgg_reid = get_resource_path(pipeline_name=None, resource_type=RESOURCES_MODELS_DIR_NAME, model=REID_MODEL_NAME_REID)
+
         self.hef_path_scrfd_detection = get_resource_path(pipeline_name=FACE_DETECTION_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
         self.hef_path_arcface_mobilefacenet_recognition = get_resource_path(pipeline_name=FACE_RECOGNITION_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
         # so post process
@@ -217,7 +233,7 @@ def app_callback(pad, info, user_data):
 def main():
     # Create an instance of the user app callback class
     user_data = app_callback_class()
-    app = GStreamerMultisourceApp(app_callback, user_data)
+    app = GStreamerReidMultisourceApp(app_callback, user_data)
     app.run()
     
 if __name__ == "__main__":

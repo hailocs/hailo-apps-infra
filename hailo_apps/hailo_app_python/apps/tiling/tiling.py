@@ -9,7 +9,7 @@ from gi.repository import Gst
 # Local application-specific imports
 import hailo
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import app_callback_class
-from hailo_apps.hailo_app_python.apps.rtsp.rtsp_pipeline import GStreamerRTSPApp
+from hailo_apps.hailo_app_python.apps.rtsp.rtsp_pipeline import GStreamerTilingApp
 # endregion imports
 
 # User-defined class to be used in the callback function: Inheritance from the app_callback_class
@@ -19,17 +19,17 @@ class user_app_callback_class(app_callback_class):
 
 # User-defined callback function: This is the callback function that will be called when data is available from the pipeline
 def app_callback(pad, info, user_data):
-    user_data.increment()  # Using the user_data to count the number of frames
-    string_to_print = f"Frame count: {user_data.get_count()}\n"
-    buffer = info.get_buffer()  # Get the GstBuffer from the probe info
-    if buffer is None:  # Check if the buffer is valid
+    buffer = info.get_buffer()
+    if buffer is None:
         return Gst.PadProbeReturn.OK
-    for detection in hailo.get_roi_from_buffer(buffer).get_objects_typed(hailo.HAILO_DETECTION):  # Get the detections from the buffer & Parse the detections
-        string_to_print += (f"Detection: {detection.get_label()} Confidence: {detection.get_confidence():.2f}\n")
-    print(string_to_print)
+    roi = hailo.get_roi_from_buffer(buffer)
+    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
+    for detection in detections:
+        track_id = detection.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
+        print(f'Unified callback, {roi.get_stream_id()}_{detection.get_label()}_{track_id}')
     return Gst.PadProbeReturn.OK
 
 if __name__ == "__main__":
     user_data = user_app_callback_class()  # Create an instance of the user app callback class
-    app = GStreamerRTSPApp(app_callback, user_data)
+    app = GStreamerTilingApp(app_callback, user_data)
     app.run()
