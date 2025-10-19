@@ -13,17 +13,10 @@ from gi.repository import Gst
 import hailo
 from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path, get_resource_path
 from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
-from hailo_apps.hailo_app_python.core.common.defines import HAILO_ARCH_KEY, TAPPAS_STREAM_ID_TOOL_SO_FILENAME, MULTI_SOURCE_PARAMS_JSON_NAME, RESOURCES_JSON_DIR_NAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
+from hailo_apps.hailo_app_python.core.common.defines import TAPPAS_STREAM_ID_TOOL_SO_FILENAME, MULTI_SOURCE_APP_TITLE, SIMPLE_DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION, TAPPAS_POSTPROC_PATH_KEY
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import get_source_type, USER_CALLBACK_PIPELINE, TRACKER_PIPELINE, QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, DISPLAY_PIPELINE
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
 # endregion imports
-
-
-# Logger
-from hailo_apps.hailo_app_python.core.common.hailo_logger import get_logger
-
-hailo_logger = get_logger(__name__)
-
 
 # User Gstreamer Application: This class inherits from the common.GStreamerApp class
 class GStreamerMultisourceApp(GStreamerApp):
@@ -32,24 +25,19 @@ class GStreamerMultisourceApp(GStreamerApp):
         if parser == None:
             parser = get_default_parser()
         parser.add_argument("--sources", default='', help="The list of sources to use for the multisource pipeline, separated with comma e.g., /dev/video0,/dev/video1")
-        parser.add_argument("--width", default='640', help="Video width (resolution) for ALL the sources. Default is 640.")
-        parser.add_argument("--height", default='640', help="Video height (resolution) for ALL the sources. Default is 640.")
+        parser.add_argument("--width", default=640, help="Video width (resolution) for ALL the sources. Default is 640.")
+        parser.add_argument("--height", default=640, help="Video height (resolution) for ALL the sources. Default is 640.")
 
         super().__init__(parser, user_data)  # Call the parent class constructor
 
         # Determine the architecture if not specified
-        if self.options_menu.arch is None:    
-            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
-            if not arch:
-                hailo_logger.error("Could not detect Hailo architecture.")
-                raise ValueError(
-                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
-                )
-            self.arch = arch
-            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
+        if self.options_menu.arch is None:
+            detected_arch = detect_hailo_arch()
+            if detected_arch is None:
+                raise ValueError('Could not auto-detect Hailo architecture. Please specify --arch manually.')
+            self.arch = detected_arch
         else:
             self.arch = self.options_menu.arch
-            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
         setproctitle.setproctitle(MULTI_SOURCE_APP_TITLE)  # Set the process title
 
@@ -58,7 +46,6 @@ class GStreamerMultisourceApp(GStreamerApp):
         self.post_function_name = DETECTION_POSTPROCESS_FUNCTION
         self.video_sources_types = [(video_source, get_source_type(video_source)) for video_source in (self.options_menu.sources.split(',') if self.options_menu.sources else [self.video_source, self.video_source])]  # Default to 2 sources if none specified
         self.num_sources = len(self.video_sources_types)
-        self.algo_params = json.load(open(get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=MULTI_SOURCE_PARAMS_JSON_NAME), "r+"))
         self.video_height = self.options_menu.height
         self.video_width = self.options_menu.width
 
@@ -76,14 +63,14 @@ class GStreamerMultisourceApp(GStreamerApp):
         for id in range(self.num_sources):
             sources_string += SOURCE_PIPELINE(video_source=self.video_sources_types[id][0],
                                               video_width=self.video_width, video_height=self.video_height,
-                                              frame_rate=self.frame_rate, sync=self.sync, name=f"source_{id}", no_webcam_compression=True)
+                                              frame_rate=self.frame_rate, sync=self.sync, name=f"source_{id}", no_webcam_compression=False)
             sources_string += f"! hailofilter name=set_src_{id} so-path={set_stream_id_so} config-path=src_{id} "
             sources_string += f"! robin.sink_{id} "
             router_string += f"router.src_{id} ! {USER_CALLBACK_PIPELINE(name=f'src_{id}_callback')} ! {QUEUE(name=f'callback_q_{id}')} ! {DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps, name=f'hailo_display_{id}')} "
 
         self.thresholds_str = (
-            f"nms-score-threshold={self.algo_params['nms_score_threshold']} "
-            f"nms-iou-threshold={self.algo_params['nms_iou_threshold']} "
+            f"nms-score-threshold=0.3 "
+            f"nms-iou-threshold=0.45 "
             f"output-format-type=HAILO_FORMAT_TYPE_FLOAT32"
         )
 
@@ -100,8 +87,7 @@ class GStreamerMultisourceApp(GStreamerApp):
             inference_string += f"src_{id}::input-streams=\"<sink_{id}>\" "
 
         pipeline_string = sources_string + inference_string + router_string
-
-        # print(pipeline_string)
+        print(pipeline_string)
         return pipeline_string
 
     def generate_callbacks(self):
