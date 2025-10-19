@@ -32,7 +32,6 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     MULTI_SOURCE_DIR_NAME,
     REID_CLASSIFICATION_TYPE,
     REID_CROPPER_POSTPROCESS_FUNCTION,
-    REID_DETECTION_POSTPROCESS_FUNCTION,
     REID_MULTISOURCE_APP_TITLE,
     REID_POSTPROCESS_FUNCTION,
     REID_POSTPROCESS_SO_FILENAME,
@@ -99,7 +98,6 @@ class GStreamerREIDMultisourceApp(GStreamerApp):
             self.post_function_scrfd_detection = SCRFD_8L_POSTPROCESS_FUNCTION
         self.post_function_arcface_mobilefacenet_recognition = ARCFACE_MOBILEFACENET_POSTPROCESS_FUNCTION
         self.post_function_vms_cropper = VMS_CROPPER_POSTPROCESS_FUNCTION
-        self.post_function_yolo_detection = REID_DETECTION_POSTPROCESS_FUNCTION
         self.post_function_repvgg_reid = REID_POSTPROCESS_FUNCTION
         self.post_function_cropper = REID_CROPPER_POSTPROCESS_FUNCTION
 
