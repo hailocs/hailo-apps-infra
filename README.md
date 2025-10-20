@@ -29,7 +29,7 @@ git clone https://github.com/hailo-ai/hailo-apps-infra.git
 cd hailo-apps-infra
 
 # Run the installer
-./install.sh
+sudo ./install.sh
 ```
 
 ### Running Applications
