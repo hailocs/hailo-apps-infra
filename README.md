@@ -109,4 +109,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Getting Help
 
 If you run into any issues, the best place to get help is the [Hailo Community Forum](https://community.hailo.ai/). You can search for existing solutions or open a new topic to get help from the community and the Hailo team.
-

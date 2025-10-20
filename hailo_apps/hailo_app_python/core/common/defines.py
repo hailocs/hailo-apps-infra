@@ -239,13 +239,10 @@ MULTI_SOURCE_DIR_NAME = "reid_multisource"
 MULTI_SOURCE_DATABASE_DIR_NAME = "database"
 REID_POSTPROCESS_SO_FILENAME = "librepvgg_reid_postprocess.so"
 ALL_DETECTIONS_CROPPER_POSTPROCESS_SO_FILENAME = "liball_detections_cropper_postprocess.so"
-REID_DETECTION_POSTPROCESS_FUNCTION = 'yolov5s_personface_rgb'
 REID_CROPPER_POSTPROCESS_FUNCTION = 'all_detections'
 REID_POSTPROCESS_FUNCTION = 'filter'
 REID_TRACKER_UPDATE_POSTPROCESS_FUNCTION = 'filter_reid'
 REID_CLASSIFICATION_TYPE = 'reid'
-REID_MODEL_NAME_DET = 'yolov5s_personface'
-REID_MODEL_NAME_REID = 'repvgg_a0_person_reid_512'
 
 # RTSP pipeline defaults
 RTSP_APP_TITLE = "Hailo RTSP App"
