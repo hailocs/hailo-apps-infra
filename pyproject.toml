@@ -41,7 +41,6 @@ hailo-pose =                "hailo_apps.hailo_app_python.apps.pose_estimation.po
 hailo-seg =                 "hailo_apps.hailo_app_python.apps.instance_segmentation.instance_segmentation_pipeline:main"
 hailo-detect-simple =       "hailo_apps.hailo_app_python.apps.detection_simple.detection_pipeline_simple:main"
 hailo-face-recon =          "hailo_apps.hailo_app_python.apps.face_recognition.face_recognition:main"
-hailo-rtsp =                "hailo_apps.hailo_app_python.apps.rtsp.rtsp:main"
 hailo-tiling =              "hailo_apps.hailo_app_python.apps.tiling.tiling_pipeline:main"
 hailo-multisource =         "hailo_apps.hailo_app_python.apps.multisource.multisource_pipeline:main"
 hailo-reid =                "hailo_apps.hailo_app_python.apps.reid_multisource.reid_multisource_pipeline:main"

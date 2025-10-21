@@ -93,10 +93,10 @@ The application is part of the `hailo-apps-infra` package - please follow those 
 ```
 git clone https://github.com/hailo-ai/hailo-apps-infra.git
 # cd to the directory
-./install.sh  # install all
-source hailo_rpi_examples_venv/bin/activate  # activate python virtual enviornment
+./install.sh --all  # install all
+source setup_env.sh  # activate python virtual enviornment
 export DISPLAY=:0  # required only if working on remote Pi with external display
-python hailo_apps_infra/hailo_core/hailo_installation/post_install.py  # post installatin procedures
+hailo-post-install  # post installatin procedures
 # cd to app directory
 python face_recognition.py --mode train  # first populate the DB
 
