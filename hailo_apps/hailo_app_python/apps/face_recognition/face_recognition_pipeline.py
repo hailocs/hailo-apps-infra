@@ -45,7 +45,6 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     FACE_RECON_SAMPLES_DIR_NAME,
     RESOURCES_JSON_DIR_NAME,
     FACE_DETECTION_JSON_NAME,
-    FACE_ALGO_PARAMS_JSON_NAME,
     DEFAULT_LOCAL_RESOURCES_PATH,
     FACE_RECON_DATABASE_DIR_NAME,
     FACE_RECON_LOCAL_SAMPLES_DIR_NAME,
@@ -67,8 +66,9 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
         self.embedding_queue = multiprocessing.Queue()  # Create a queue for sending embeddings to the visualization process
 
         # Criteria for when a candidate frame is good enough to try recognize a person from it (e.g., skip the first few frames since in them person only entered the frame and usually is blurry)
-        self.json_file = open(get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=FACE_ALGO_PARAMS_JSON_NAME), "r+")
-        self.algo_params = json.load(self.json_file)
+        json_file_path = os.path.join(os.path.dirname(__file__), "face_recon_algo_params.json")
+        with open(json_file_path, "r+") as json_file:
+            self.algo_params = json.load(json_file)
         # 1. How many frames to skip between detection attempts: avoid porocessing first frames since usually they are blurry since person just entered the frame, see self.track_id_frame_count
         self.skip_frames = self.algo_params['skip_frames']
         # 2. Confidence threshold for face classification: if the confidence is below this value, the face will not be recognized
