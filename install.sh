@@ -175,9 +175,6 @@ USE_SYSTEM_SITE_PACKAGES=true
 if [[ "$NO_SYSTEM_PYTHON" = true ]]; then
   USE_SYSTEM_SITE_PACKAGES=false
   echo "🔧 Using --no-system-python flag: virtualenv will not use system site-packages"
-elif [[ "$IS_X86" = true ]]; then
-  USE_SYSTEM_SITE_PACKAGES=false
-  echo "🔧 Detected x86 architecture: virtualenv will not use system site-packages"
 else
   echo "🔧 Using system site-packages for virtualenv"
 fi
@@ -209,10 +206,10 @@ sudo apt install python3-gi python3-gi-cairo
 # Create virtual environment with or without system site-packages
 if [[ "$USE_SYSTEM_SITE_PACKAGES" = true ]]; then
   echo "🌱 Creating virtualenv '${VENV_NAME}' (with system site-packages)…"
-  python3 -m venv --system-site-packages "${VENV_PATH}"
+  as_original_user python3 -m venv --system-site-packages "${VENV_PATH}"
 else
   echo "🌱 Creating virtualenv '${VENV_NAME}' (without system site-packages)…"
-  python3 -m venv "${VENV_PATH}"
+  as_original_user python3 -m venv "${VENV_PATH}"
 fi
 
 if [[ ! -f "${VENV_PATH}/bin/activate" ]]; then
@@ -221,53 +218,56 @@ if [[ ! -f "${VENV_PATH}/bin/activate" ]]; then
 fi
 
 echo "🔌 Activating venv: ${VENV_NAME}"
-source "${VENV_PATH}/bin/activate"
 
-if [[ -n "$PYHAILORT_PATH" ]]; then
-  echo "Using custom HailoRT Python binding path: $PYHAILORT_PATH"
-  if [[ ! -f "$PYHAILORT_PATH" ]]; then
-    echo "❌ HailoRT Python binding not found at $PYHAILORT_PATH"
-    exit 1
+# Run all Python operations as the original user
+as_original_user bash -c "
+  source '${VENV_PATH}/bin/activate'
+  
+  if [[ -n '${PYHAILORT_PATH}' ]]; then
+    echo 'Using custom HailoRT Python binding path: ${PYHAILORT_PATH}'
+    if [[ ! -f '${PYHAILORT_PATH}' ]]; then
+      echo '❌ HailoRT Python binding not found at ${PYHAILORT_PATH}'
+      exit 1
+    fi
+    pip install '${PYHAILORT_PATH}'
+    INSTALL_HAILORT=false
   fi
-  pip install "$PYHAILORT_PATH"
-  INSTALL_HAILORT=false
-fi
-if [[ -n "$PYTAPPAS_PATH" ]]; then
-  echo "Using custom TAPPAS Python binding path: $PYTAPPAS_PATH"
-  if [[ ! -f "$PYTAPPAS_PATH" ]]; then
-    echo "❌ TAPPAS Python binding not found at $PYTAPPAS_PATH"
-    exit 1
+  if [[ -n '${PYTAPPAS_PATH}' ]]; then
+    echo 'Using custom TAPPAS Python binding path: ${PYTAPPAS_PATH}'
+    if [[ ! -f '${PYTAPPAS_PATH}' ]]; then
+      echo '❌ TAPPAS Python binding not found at ${PYTAPPAS_PATH}'
+      exit 1
+    fi
+    pip install '${PYTAPPAS_PATH}'
+    INSTALL_TAPPAS_CORE=false
   fi
-  pip install "$PYTAPPAS_PATH"
-  INSTALL_TAPPAS_CORE=false
-fi
 
-echo "📦 Installing Python Hailo packages…"
-FLAGS=""
-if [[ "$INSTALL_TAPPAS_CORE" = true ]]; then
-  echo "Installing TAPPAS core Python binding"
-  FLAGS="--tappas-core-version=${TAPPAS_CORE_VERSION}"
-fi
-if [[ "$INSTALL_HAILORT" = true ]]; then
-  echo "Installing HailoRT Python binding"
-  FLAGS="${FLAGS} --hailort-version=${HAILORT_VERSION}"
-fi
+  echo '📦 Installing Python Hailo packages…'
+  FLAGS=''
+  if [[ '${INSTALL_TAPPAS_CORE}' = true ]]; then
+    echo 'Installing TAPPAS core Python binding'
+    FLAGS='--tappas-core-version=${TAPPAS_CORE_VERSION}'
+  fi
+  if [[ '${INSTALL_HAILORT}' = true ]]; then
+    echo 'Installing HailoRT Python binding'
+    FLAGS=\"\${FLAGS} --hailort-version=${HAILORT_VERSION}\"
+  fi
 
-if [[ -z "$FLAGS" ]]; then
-  echo "No Hailo Python packages to install."
-else
-  echo "Installing Hailo Python packages with flags: ${FLAGS}"
-  ./scripts/hailo_python_installation.sh ${FLAGS}
-fi
+  if [[ -z \"\$FLAGS\" ]]; then
+    echo 'No Hailo Python packages to install.'
+  else
+    echo \"Installing Hailo Python packages with flags: \${FLAGS}\"
+    ./scripts/hailo_python_installation.sh \${FLAGS}
+  fi
 
-python3 -m pip install --upgrade pip setuptools wheel
+  python3 -m pip install --upgrade pip setuptools wheel
 
-echo "📦 Installing package (editable + post-install)…"
-pip install -e .
+  echo '📦 Installing package (editable + post-install)…'
+  pip install -e .
 
-echo "🔧 Running post-install script…"
-
-hailo-post-install --group "$DOWNLOAD_GROUP"
+  echo '🔧 Running post-install script…'
+  hailo-post-install --group '${DOWNLOAD_GROUP}'
+"
 
 echo "✅ All done! Your package is now in '${VENV_NAME}'."
 echo "source setup_env.sh to setup the environment"
