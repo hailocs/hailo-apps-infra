@@ -8,6 +8,7 @@ VENV_NAME="venv_hailo_apps"
 PYHAILORT_PATH=""
 PYTAPPAS_PATH=""
 NO_INSTALL=false
+NO_SYSTEM_PYTHON=false
 ENV_FILE="${SCRIPT_DIR}/.env"
 
 
@@ -31,6 +32,7 @@ OPTIONS:
     -pt, --pytappas PATH        Path to custom PyTappas wheel file
     --all                       Download all available models/resources
     -x, --no-install           Skip installation of Python packages
+    --no-system-python         Don't use system site-packages (default: use system site-packages unless on x86)
     -h, --help                  Show this help message and exit
 
 EXAMPLES:
@@ -38,6 +40,7 @@ EXAMPLES:
     $0 -n my_venv               # Use custom virtual environment name
     $0 --all                    # Install with all models/resources
     $0 -x                       # Skip Python package installation
+    $0 --no-system-python       # Don't use system site-packages
     $0 -ph /path/to/pyhailort.whl -pt /path/to/pytappas.whl  # Use custom wheel files
 
 DESCRIPTION:
@@ -83,6 +86,10 @@ while [[ $# -gt 0 ]]; do
     -x | --no-install)
       NO_INSTALL=true
       echo "Skipping installation of Python packages."
+      shift
+      ;;
+    --no-system-python)
+      NO_SYSTEM_PYTHON=true
       shift
       ;;
     -h|--help)
@@ -156,6 +163,25 @@ fi
 
 VENV_PATH="${SCRIPT_DIR}/${VENV_NAME}"
 
+# Detect architecture
+ARCH=$(uname -m)
+IS_X86=false
+if [[ "$ARCH" == "x86_64" || "$ARCH" == "i386" || "$ARCH" == "i686" ]]; then
+  IS_X86=true
+fi
+
+# Determine whether to use system site-packages
+USE_SYSTEM_SITE_PACKAGES=true
+if [[ "$NO_SYSTEM_PYTHON" = true ]]; then
+  USE_SYSTEM_SITE_PACKAGES=false
+  echo "🔧 Using --no-system-python flag: virtualenv will not use system site-packages"
+elif [[ "$IS_X86" = true ]]; then
+  USE_SYSTEM_SITE_PACKAGES=false
+  echo "🔧 Detected x86 architecture: virtualenv will not use system site-packages"
+else
+  echo "🔧 Using system site-packages for virtualenv"
+fi
+
 if [[ -d "${VENV_PATH}" ]]; then
   echo "🗑️  Removing existing virtualenv at ${VENV_PATH}"
   rm -rf "${VENV_PATH}"
@@ -180,8 +206,14 @@ echo "✅ Created .env file at ${ENV_FILE}"
 sudo apt-get install -y meson
 sudo apt install python3-gi python3-gi-cairo
 
-echo "🌱 Creating virtualenv '${VENV_NAME}' (with system site-packages)…"
-python3 -m venv --system-site-packages "${VENV_PATH}"
+# Create virtual environment with or without system site-packages
+if [[ "$USE_SYSTEM_SITE_PACKAGES" = true ]]; then
+  echo "🌱 Creating virtualenv '${VENV_NAME}' (with system site-packages)…"
+  python3 -m venv --system-site-packages "${VENV_PATH}"
+else
+  echo "🌱 Creating virtualenv '${VENV_NAME}' (without system site-packages)…"
+  python3 -m venv "${VENV_PATH}"
+fi
 
 if [[ ! -f "${VENV_PATH}/bin/activate" ]]; then
   echo "❌ Could not find activate at ${VENV_PATH}/bin/activate"
