@@ -29,7 +29,11 @@ def app_callback(pad, info, user_data):
     print(string_to_print)
     return Gst.PadProbeReturn.OK
 
-if __name__ == "__main__":
+def main():
     user_data = user_app_callback_class()  # Create an instance of the user app callback class
     app = GStreamerTilingApp(app_callback, user_data)
     app.run()
+
+
+if __name__ == "__main__":
+    main()
