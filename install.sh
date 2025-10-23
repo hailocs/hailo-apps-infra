@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 SUMMARY_LINE=$(
-  sudo -u "${SUDO_USER:-$USER}" -H ./scripts/check_installed_packages.sh 2>&1 \
+  as_original_user ./scripts/check_installed_packages.sh 2>&1 \
     | sed -n 's/^SUMMARY: //p'
 )
 
@@ -181,18 +181,37 @@ fi
 
 if [[ -d "${VENV_PATH}" ]]; then
   echo "🗑️  Removing existing virtualenv at ${VENV_PATH}"
-  rm -rf "${VENV_PATH}"
+  # Try removing as regular user first, fallback to sudo if needed
+  if ! as_original_user rm -rf "${VENV_PATH}" 2>/dev/null; then
+    echo "  ⚠️  Regular user removal failed, trying with sudo..."
+    sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "${VENV_PATH}" 2>/dev/null || true
+    as_original_user rm -rf "${VENV_PATH}"
+  fi
 fi
 
 echo "🧹 Cleaning up build artifacts..."
-find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
-rm -rf build/ dist/ 2>/dev/null || true
+# Try cleaning as regular user first, fallback to sudo if needed
+if ! as_original_user find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null; then
+  echo "  ⚠️  Regular user cleanup failed, fixing ownership..."
+  sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" . 2>/dev/null || true
+  as_original_user find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
+fi
+
+if ! as_original_user rm -rf build/ dist/ 2>/dev/null; then
+  echo "  ⚠️  Regular user cleanup failed, fixing ownership..."
+  sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" . 2>/dev/null || true
+  as_original_user rm -rf build/ dist/ 2>/dev/null || true
+fi
 echo "✅ Build artifacts cleaned"
 
 # Remove existing .env file if it exists
 if [[ -f "${ENV_FILE}" ]]; then
   echo "🗑️  Removing existing .env file at ${ENV_FILE}"
-  as_original_user rm -f "${ENV_FILE}"
+  if ! as_original_user rm -f "${ENV_FILE}" 2>/dev/null; then
+    echo "  ⚠️  Regular user removal failed, trying with sudo..."
+    sudo chown "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "${ENV_FILE}" 2>/dev/null || true
+    as_original_user rm -f "${ENV_FILE}"
+  fi
 fi
 
 # Create .env file with proper ownership and permissions
@@ -219,28 +238,24 @@ fi
 
 echo "🔌 Activating venv: ${VENV_NAME}"
 
-# Run all Python operations as the original user
-as_original_user bash -c "
-  source '${VENV_PATH}/bin/activate'
-  
-  if [[ -n '${PYHAILORT_PATH}' ]]; then
-    echo 'Using custom HailoRT Python binding path: ${PYHAILORT_PATH}'
-    if [[ ! -f '${PYHAILORT_PATH}' ]]; then
-      echo '❌ HailoRT Python binding not found at ${PYHAILORT_PATH}'
-      exit 1
-    fi
-    pip install '${PYHAILORT_PATH}'
-    INSTALL_HAILORT=false
+if [[ -n "$PYHAILORT_PATH" ]]; then
+  echo "Using custom HailoRT Python binding path: $PYHAILORT_PATH"
+  if [[ ! -f "$PYHAILORT_PATH" ]]; then
+    echo "❌ HailoRT Python binding not found at $PYHAILORT_PATH"
+    exit 1
   fi
-  if [[ -n '${PYTAPPAS_PATH}' ]]; then
-    echo 'Using custom TAPPAS Python binding path: ${PYTAPPAS_PATH}'
-    if [[ ! -f '${PYTAPPAS_PATH}' ]]; then
-      echo '❌ TAPPAS Python binding not found at ${PYTAPPAS_PATH}'
-      exit 1
-    fi
-    pip install '${PYTAPPAS_PATH}'
-    INSTALL_TAPPAS_CORE=false
+  as_original_user bash -c "source '${VENV_PATH}/bin/activate' && pip install '$PYHAILORT_PATH'"
+  INSTALL_HAILORT=false
+fi
+if [[ -n "$PYTAPPAS_PATH" ]]; then
+  echo "Using custom TAPPAS Python binding path: $PYTAPPAS_PATH"
+  if [[ ! -f "$PYTAPPAS_PATH" ]]; then
+    echo "❌ TAPPAS Python binding not found at $PYTAPPAS_PATH"
+    exit 1
   fi
+  as_original_user bash -c "source '${VENV_PATH}/bin/activate' && pip install '$PYTAPPAS_PATH'"
+  INSTALL_TAPPAS_CORE=false
+fi
 
   echo '📦 Installing Python Hailo packages…'
   FLAGS=''
@@ -253,21 +268,149 @@ as_original_user bash -c "
     FLAGS=\"\${FLAGS} --hailort-version=${HAILORT_VERSION}\"
   fi
 
-  if [[ -z \"\$FLAGS\" ]]; then
-    echo 'No Hailo Python packages to install.'
-  else
-    echo \"Installing Hailo Python packages with flags: \${FLAGS}\"
-    ./scripts/hailo_python_installation.sh \${FLAGS}
-  fi
+if [[ -z "$FLAGS" ]]; then
+  echo "No Hailo Python packages to install."
+else
+  echo "Installing Hailo Python packages with flags: ${FLAGS}"
+  as_original_user ./scripts/hailo_python_installation.sh ${FLAGS}
+fi
 
-  python3 -m pip install --upgrade pip setuptools wheel
+as_original_user bash -c "source '${VENV_PATH}/bin/activate' && python3 -m pip install --upgrade pip setuptools wheel"
 
-  echo '📦 Installing package (editable + post-install)…'
-  pip install -e .
+echo "📦 Installing package (editable + post-install)…"
+as_original_user bash -c "source '${VENV_PATH}/bin/activate' && pip install -e ."
 
-  echo '🔧 Running post-install script…'
-  hailo-post-install --group '${DOWNLOAD_GROUP}'
-"
+# Create Hailo resources directories with correct permissions
+echo "📁 Creating Hailo resources directories..."
+
+RESOURCES_ROOT="/usr/local/hailo/resources"
+ORIGINAL_USER="${SUDO_USER:-$USER}"
+
+# Create the directory structure
+sudo mkdir -p ${RESOURCES_ROOT}/models/{hailo8,hailo8l,hailo10h}
+sudo mkdir -p ${RESOURCES_ROOT}/{videos,so,photos,json,packages}
+sudo mkdir -p ${RESOURCES_ROOT}/face_recon/{train,samples}
+
+# Set ownership to current user and their primary group
+sudo chown -R ${ORIGINAL_USER}:${ORIGINAL_USER} ${RESOURCES_ROOT}
+
+# Set permissions: rwxr-xr-x for directories (775 for group access)
+sudo chmod -R 775 ${RESOURCES_ROOT}
+
+# Ensure the user can write to these directories
+sudo chmod -R u+w ${RESOURCES_ROOT}
+
+echo "✅ Hailo resources directories created successfully"
+echo "   Owner: ${ORIGINAL_USER}:${ORIGINAL_USER}"
+echo "   Location: ${RESOURCES_ROOT}"
+
+echo "🔧 Running post-install script…"
+
+# Fix permissions for C++ build directory before post-install (only if needed)
+if [[ -d "hailo_apps/hailo_app_python/core/cpp_postprocess" ]]; then
+    # Check if user can write to the directory, if not, fix ownership
+    if ! as_original_user test -w "hailo_apps/hailo_app_python/core/cpp_postprocess" 2>/dev/null; then
+        echo "  ⚠️  Fixing C++ build directory permissions..."
+        sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "hailo_apps/hailo_app_python/core/cpp_postprocess" 2>/dev/null || true
+    fi
+fi
+
+# Fix resources directory permissions if needed
+echo "🔍 Checking resources directory permissions..."
+if [[ -d "resources" ]]; then
+    # Check if it's a symlink and test the target directory
+    if [[ -L "resources" ]]; then
+        target_dir=$(readlink "resources")
+        echo "  🔗 Resources is a symlink pointing to: $target_dir"
+        # Test if user can write to the target directory
+        if ! as_original_user test -w "$target_dir" 2>/dev/null; then
+            echo "  ⚠️  Target directory requires sudo permissions, fixing ownership..."
+            sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$target_dir" 2>/dev/null || true
+        fi
+        # Also fix the symlink itself
+        if ! as_original_user test -w "resources" 2>/dev/null; then
+            echo "  ⚠️  Symlink requires sudo permissions, fixing ownership..."
+            sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "resources" 2>/dev/null || true
+        fi
+    else
+        # It's a regular directory
+        if ! as_original_user test -w "resources" 2>/dev/null; then
+            echo "  ⚠️  Resources directory requires sudo permissions, fixing ownership..."
+            sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "resources" 2>/dev/null || true
+        fi
+    fi
+fi
+
+as_original_user bash -c "source '${VENV_PATH}/bin/activate' && hailo-post-install --group '$DOWNLOAD_GROUP'"
+
+echo ""
+echo "🔍 Verifying installation..."
+
+# Verification function
+verify_installation() {
+    local success=true
+    
+    echo "  📁 Checking virtual environment..."
+    if [[ -f "${VENV_PATH}/bin/activate" ]]; then
+        echo "    ✅ Virtual environment created successfully"
+    else
+        echo "    ❌ Virtual environment not found"
+        success=false
+    fi
+    
+    echo "  🐍 Checking Python packages..."
+    if as_original_user bash -c "source '${VENV_PATH}/bin/activate' && python3 -c 'import hailo_apps; print(\"Hailo Apps version:\", hailo_apps.__file__)'" 2>/dev/null; then
+        echo "    ✅ Hailo Apps package installed successfully"
+    else
+        echo "    ❌ Hailo Apps package not properly installed"
+        success=false
+    fi
+    
+    echo "  📦 Checking HailoRT Python bindings..."
+    if as_original_user bash -c "source '${VENV_PATH}/bin/activate' && python3 -c 'import hailo; print(\"HailoRT available\")'" 2>/dev/null; then
+        echo "    ✅ HailoRT Python bindings available"
+    else
+        echo "    ⚠️  HailoRT Python bindings not available (may need system installation)"
+    fi
+    
+    echo "  📦 Checking TAPPAS Python bindings..."
+    if as_original_user bash -c "source '${VENV_PATH}/bin/activate' && python3 -c 'import hailo_platform; print(\"TAPPAS available\")'" 2>/dev/null; then
+        echo "    ✅ TAPPAS Python bindings available"
+    else
+        echo "    ⚠️  TAPPAS Python bindings not available (may need system installation)"
+    fi
+    
+    echo "  📁 Checking resources directory..."
+    if [[ -d "resources" && -L "resources" ]]; then
+        echo "    ✅ Resources symlink created successfully"
+        if [[ -d "resources/models" ]]; then
+            local model_count=$(find resources/models -name "*.hef" 2>/dev/null | wc -l)
+            echo "    ✅ Found $model_count model files"
+        else
+            echo "    ⚠️  Models directory not found"
+        fi
+    else
+        echo "    ❌ Resources directory not properly set up"
+        success=false
+    fi
+    
+    
+    echo "  📄 Checking environment file..."
+    if [[ -f ".env" ]]; then
+        echo "    ✅ Environment file created successfully"
+    else
+        echo "    ❌ Environment file not found"
+        success=false
+    fi
+}
+
+# Run verification
+verify_installation
+
+echo ""
+echo "✅ Installation process completed!"
+echo "Virtual environment: ${VENV_NAME}"
+echo "Location: ${VENV_PATH}"
 
 echo "✅ All done! Your package is now in '${VENV_NAME}'."
 echo "source setup_env.sh to setup the environment"
