@@ -32,35 +32,47 @@ from hailo_apps.hailo_app_python.core.installation.set_env import (
 
 
 def setup_resource_dirs():
-    """Create resource directories for Hailo applications.
-    Also sets ownership and permissions.
-    """
+    """Create resource directories for Hailo applications with correct ownership and permissions."""
     hailo_logger.debug("Entering setup_resource_dirs()")
 
-    # Determine installation user
+    # Detect installation user (original user if run with sudo)
     sudo_user = os.environ.get("SUDO_USER")
-    install_user = sudo_user or pwd.getpwuid(os.getuid()).pw_name
-    hailo_logger.debug(f"Detected installation user: {install_user}")
+    if sudo_user:
+        install_user = sudo_user
+    else:
+        install_user = pwd.getpwuid(os.getuid()).pw_name
 
-    # Get group name
     pw = pwd.getpwnam(install_user)
     grpname = grp.getgrgid(pw.pw_gid).gr_name
+
+    hailo_logger.debug(f"Detected installation user: {install_user}")
     hailo_logger.debug(f"Detected group: {grpname}")
 
-    # Create subdirectories
+    # Helper: run command as current user (no sudo) or elevated if needed
+    def run_cmd(cmd, use_sudo=False):
+        if use_sudo and os.geteuid() != 0:
+            cmd = ["sudo", "-n"] + cmd
+        hailo_logger.debug(f"Running command: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+
+    # Check if current user can write to /usr/local/hailo
+    need_sudo = not os.access("/usr/local", os.W_OK)
+
+    # Create directories
     for sub in RESOURCES_DIRS_MAP:
-        target = sub
-        hailo_logger.debug(f"Creating directory: {target}")
-        subprocess.run(["sudo", "mkdir", "-p", str(target)], check=True)
+        run_cmd(["mkdir", "-p", str(sub)], use_sudo=need_sudo)
+
+    # Set ownership
+    run_cmd(
+        ["chown", "-R", f"{install_user}:{grpname}", str(RESOURCES_ROOT_PATH_DEFAULT)],
+        use_sudo=need_sudo,
+    )
 
     # Set permissions
-    hailo_logger.debug(f"Setting ownership to {install_user}:{grpname}")
-    subprocess.run(
-        ["sudo", "chown", "-R", f"{install_user}:{grpname}", str(RESOURCES_ROOT_PATH_DEFAULT)],
-        check=True,
+    run_cmd(
+        ["chmod", "-R", "775", str(RESOURCES_ROOT_PATH_DEFAULT)],
+        use_sudo=need_sudo,
     )
-    hailo_logger.debug("Setting directory permissions to 755")
-    subprocess.run(["sudo", "chmod", "-R", "755", str(RESOURCES_ROOT_PATH_DEFAULT)], check=True)
 
     hailo_logger.info("✅ Resource directories created successfully.")
     print("✅ Resource directories created successfully.")
