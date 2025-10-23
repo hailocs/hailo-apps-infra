@@ -306,15 +306,6 @@ echo "   Location: ${RESOURCES_ROOT}"
 
 echo "🔧 Running post-install script…"
 
-# Fix permissions for C++ build directory before post-install (only if needed)
-if [[ -d "hailo_apps/hailo_app_python/core/cpp_postprocess" ]]; then
-    # Check if user can write to the directory, if not, fix ownership
-    if ! as_original_user test -w "hailo_apps/hailo_app_python/core/cpp_postprocess" 2>/dev/null; then
-        echo "  ⚠️  Fixing C++ build directory permissions..."
-        sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "hailo_apps/hailo_app_python/core/cpp_postprocess" 2>/dev/null || true
-    fi
-fi
-
 # Fix resources directory permissions if needed
 echo "🔍 Checking resources directory permissions..."
 if [[ -d "resources" ]]; then
@@ -341,7 +332,18 @@ if [[ -d "resources" ]]; then
     fi
 fi
 
-as_original_user bash -c "source '${VENV_PATH}/bin/activate' && hailo-post-install --group '$DOWNLOAD_GROUP'"
+if ! as_original_user bash -c "source '${VENV_PATH}/bin/activate' && hailo-post-install --group '$DOWNLOAD_GROUP'"; then
+    echo ""
+    echo "❌ Post-installation failed!"
+    echo "This usually means:"
+    echo "  - C++ compilation failed (check for permission issues in build directories)"
+    echo "  - Resource download failed (check network connection)"
+    echo "  - Environment setup failed"
+    echo ""
+    echo "Please check the error messages above and try again."
+    echo "If you see permission errors, you may need to clean up old build directories with sudo."
+    exit 1
+fi
 
 echo ""
 echo "🔍 Verifying installation..."
@@ -402,6 +404,23 @@ verify_installation() {
         echo "    ❌ Environment file not found"
         success=false
     fi
+    
+    echo "  🔨 Checking C++ postprocess compilation..."
+    # Check for compiled C++ libraries in the expected location
+    if [[ -d "/usr/local/hailo/resources/so" ]]; then
+        local so_count=$(find /usr/local/hailo/resources/so -name "*.so" 2>/dev/null | wc -l)
+        if [[ $so_count -gt 0 ]]; then
+            echo "    ✅ Found $so_count compiled C++ postprocess libraries"
+        else
+            echo "    ⚠️  No compiled C++ postprocess libraries found"
+            echo "       This may affect some advanced features"
+        fi
+    else
+        echo "    ⚠️  C++ library directory not found"
+        echo "       This may affect some advanced features"
+    fi
+    
+    return 0
 }
 
 # Run verification

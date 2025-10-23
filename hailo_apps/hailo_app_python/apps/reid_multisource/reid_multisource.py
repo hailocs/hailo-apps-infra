@@ -29,7 +29,11 @@ def app_callback(pad, info, user_data):
         print(f'Unified callback, {roi.get_stream_id()}_{detection.get_label()}_{track_id}')
     return Gst.PadProbeReturn.OK
 
-if __name__ == "__main__":
+def main():
     user_data = user_app_callback_class()  # Create an instance of the user app callback class
     app = GStreamerREIDMultisourceApp(app_callback, user_data)
     app.run()
+
+
+if __name__ == "__main__":
+    main()
