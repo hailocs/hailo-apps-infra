@@ -51,7 +51,7 @@ Face recognition confidence is per person record in the database, initiated with
 
 For best performance, there is a quality selection mechanism on what frames are good enough to be evaluated and searched for face classification. The parameters are read from:
 
-[face_recon_algo_params.json](../../../../local_resources/face_recon_algo_params.json)
+[face_recon_algo_params.json](face_recon_algo_params.json)
 
 and are also tunable via UI sliders (don't forget to save the selection).
 

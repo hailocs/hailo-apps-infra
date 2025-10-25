@@ -18,7 +18,7 @@ from gi.repository import Gst
 import numpy as np
 from PIL import Image
 import matplotlib
-matplotlib.use('TkAgg')  # Use TkAgg backend for interactive display
+matplotlib.use('Agg')  # Use Agg backend for interactive display
 import matplotlib.pyplot as plt
 
 # Local application-specific imports
@@ -45,7 +45,6 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     FACE_RECON_SAMPLES_DIR_NAME,
     RESOURCES_JSON_DIR_NAME,
     FACE_DETECTION_JSON_NAME,
-    FACE_ALGO_PARAMS_JSON_NAME,
     DEFAULT_LOCAL_RESOURCES_PATH,
     FACE_RECON_DATABASE_DIR_NAME,
     FACE_RECON_LOCAL_SAMPLES_DIR_NAME,
@@ -67,8 +66,9 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
         self.embedding_queue = multiprocessing.Queue()  # Create a queue for sending embeddings to the visualization process
 
         # Criteria for when a candidate frame is good enough to try recognize a person from it (e.g., skip the first few frames since in them person only entered the frame and usually is blurry)
-        self.json_file = open(get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=FACE_ALGO_PARAMS_JSON_NAME), "r+")
-        self.algo_params = json.load(self.json_file)
+        json_file_path = os.path.join(os.path.dirname(__file__), "face_recon_algo_params.json")
+        with open(json_file_path, "r+") as json_file:
+            self.algo_params = json.load(json_file)
         # 1. How many frames to skip between detection attempts: avoid porocessing first frames since usually they are blurry since person just entered the frame, see self.track_id_frame_count
         self.skip_frames = self.algo_params['skip_frames']
         # 2. Confidence threshold for face classification: if the confidence is below this value, the face will not be recognized
@@ -264,20 +264,71 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
     
     @staticmethod
     def display_visualization_process(db_records, embedding_queue):
-        """Run visualization in a separate process"""
+        """Run visualization in a separate process using OpenCV window"""
+        import cv2
+        import matplotlib
+        matplotlib.use('Agg')  # Keep Agg backend for generating static images
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from io import BytesIO
+        
         signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ignore SIGINT in child processes
+        
         visualizer = DatabaseVisualizer()  # Create a new visualizer in this process
         visualizer.set_db_records(db_records)
-        visualizer.visualize(mode='cli')  # Initialize the plot
-        while True:  # Append the new embeddings to the plot
+        
+        # Create OpenCV window
+        cv2.namedWindow('Face Recognition Embeddings', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Face Recognition Embeddings', 1200, 600)
+        
+        # Initialize the plot
+        fig = visualizer.visualize(mode='cli')  # This returns the figure
+        
+        def fig_to_opencv_image(fig):
+            """Convert matplotlib figure to OpenCV image"""
+            # Save figure to memory buffer
+            buf = BytesIO()
+            fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+            buf.seek(0)
+            
+            # Convert to numpy array
+            img_array = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+            buf.close()
+            
+            # Decode to OpenCV image
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            return img
+        
+        # Display initial plot
+        img = fig_to_opencv_image(visualizer.global_fig)
+        cv2.imshow('Face Recognition Embeddings', img)
+        cv2.waitKey(1)  # Non-blocking wait
+        
+        while True:  # Append the new embeddings to the plot 
             try:
                 embedding_vector, label = embedding_queue.get(timeout=0.1)  # Get new embedding from the queue
                 visualizer.add_embeddings_to_existing_plot(embeddings=[embedding_vector], labels=[label])
+                
+                # Convert updated plot to OpenCV image and display
+                img = fig_to_opencv_image(visualizer.global_fig)
+                cv2.imshow('Face Recognition Embeddings', img)
+                
+                # Check for window close or ESC key
+                key = cv2.waitKey(1) & 0xFF
+                if key == 27 or cv2.getWindowProperty('Face Recognition Embeddings', cv2.WND_PROP_VISIBLE) < 1:  # ESC key or window closed
+                    break
+                
             except queue.Empty:  # No embedding available in the queue
-                plt.pause(0.1)  # Add a small pause to prevent high CPU usage
+                # Still need to refresh the window
+                key = cv2.waitKey(100) & 0xFF  # 100ms wait
+                if key == 27 or cv2.getWindowProperty('Face Recognition Embeddings', cv2.WND_PROP_VISIBLE) < 1:
+                    break
             except Exception as e:
                 print(f"Error in visualization process: {e}")
                 break
+        
+        # Cleanup
+        cv2.destroyAllWindows()
 
     def connect_vector_db_callback(self):
         identity = self.pipeline.get_by_name(self.vector_db_callback_name)

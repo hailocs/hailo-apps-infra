@@ -279,10 +279,7 @@ class DatabaseVisualizer:
         plt.grid(True)
         plt.tight_layout()
 
-        if mode == "cli":
-            plt.ion()
-            plt.show(block=False)  # Show the plot
-        else:  # UI
+        if mode == "ui":
             # Ensure grid is always visible (if this is a matplotlib figure)
             if hasattr(self.global_fig, "gca"):
                 ax = self.global_fig.gca()
