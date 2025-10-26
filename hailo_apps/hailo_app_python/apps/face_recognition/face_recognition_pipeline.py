@@ -6,10 +6,8 @@ import json
 import time
 import threading
 import queue
-import signal
 import uuid
 import setproctitle
-import multiprocessing
 
 # Third-party imports
 import gi
@@ -17,16 +15,12 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 import numpy as np
 from PIL import Image
-import matplotlib
-matplotlib.use('Agg')  # Use Agg backend for interactive display
-import matplotlib.pyplot as plt
 
 # Local application-specific imports
 import hailo
 from hailo import HailoTracker
 from hailo_apps.hailo_app_python.core.common.db_handler import DatabaseHandler, Record
-from hailo_apps.hailo_app_python.core.common.db_visualizer import DatabaseVisualizer
-from hailo_apps.hailo_app_python.core.common.core import FIFODropQueue, get_default_parser, detect_hailo_arch, get_resource_path
+from hailo_apps.hailo_app_python.core.common.core import get_default_parser, detect_hailo_arch, get_resource_path
 from hailo_apps.hailo_app_python.core.common.buffer_utils import get_numpy_from_buffer_efficient, get_caps_from_pad
 from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import GStreamerApp
 from hailo_apps.hailo_app_python.core.common.defines import (
@@ -50,7 +44,7 @@ from hailo_apps.hailo_app_python.core.common.defines import (
     FACE_RECON_LOCAL_SAMPLES_DIR_NAME,
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME
 )
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, CROPPER_PIPELINE, UI_APPSINK_PIPELINE
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, CROPPER_PIPELINE
 # endregion
 
 class GStreamerFaceRecognitionApp(GStreamerApp):
@@ -59,11 +53,7 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
         if parser == None:
             parser = get_default_parser()
         parser.add_argument("--mode", default='run', help="The mode of the application: run, train, delete")
-        parser.add_argument("--visualize", action="store_true", help="In run mode & CLI only, whether display the live visualization of the embeddings")
-        parser.add_argument("--ui", action="store_true", help="Whether display the Gradio UI or just CLI")
         super().__init__(parser, user_data)
-
-        self.embedding_queue = multiprocessing.Queue()  # Create a queue for sending embeddings to the visualization process
 
         # Criteria for when a candidate frame is good enough to try recognize a person from it (e.g., skip the first few frames since in them person only entered the frame and usually is blurry)
         json_file_path = os.path.join(os.path.dirname(__file__), "face_recon_algo_params.json")
@@ -123,18 +113,10 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
         self.train_vector_db_callback_name = "train_vector_db_callback"
         self.create_pipeline()  # initialize self.pipeline
         if self.options_menu.mode == 'run':
-            self.plot_thread = None
             self.connect_vector_db_callback()
-            if self.options_menu.ui:
-                self.webrtc_frames_queue = FIFODropQueue(maxsize=2)  # smaller sizes are better for live stream
-                app_sink = self.pipeline.get_by_name('ui_appsink')
-                app_sink.set_property('emit-signals', True)
-                app_sink.connect('new-sample', self.appsink_callback)
         else:  # train
             self.connect_train_vector_db_callback()
         self.track_id_frame_count = {}  # Dictionary to track frame counts for each track ID - avoid porocessing first frames since usually they are blurry since person just entered the frame 
-
-        self.visualization_process = None # Process for displaying the matplotlib embedding visualization in a separate process
         self.tracker = HailoTracker.get_instance()  # tracker object
 
         # region worker queue threads for saving images
@@ -184,10 +166,7 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
                                             so_path=self.post_process_so_cropper, function_name=self.cropper_func, internal_offset=True)
         vector_db_callback_pipeline = USER_CALLBACK_PIPELINE(name=self.vector_db_callback_name)  # 'identity name' - is a GStreamer element that does nothing, but allows to add a probe to it
         user_callback_pipeline = USER_CALLBACK_PIPELINE()
-        if self.options_menu.ui:
-            display_pipeline = UI_APPSINK_PIPELINE(name='ui_appsink')
-        else:
-            display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
+        display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
 
         if self.options_menu.mode == 'train':
             source_pipeline = (f"multifilesrc location={self.current_file} loop=true num-buffers=30 ! "  # each image 30 times
@@ -207,8 +186,6 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
     
     def run(self):
         if self.options_menu.mode == 'run':
-            if self.options_menu.visualize and not self.options_menu.ui:  # Start the visualization in a separate process
-                self.start_visualization_process()
             super().run()  # start the Gstreamer pipeline
         else:  # train
             self.run_training()
@@ -253,82 +230,6 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
                     if self.pipeline:
                         self.pipeline.set_state(Gst.State.NULL)
         print("Training completed")
-    
-    def start_visualization_process(self):
-        """Start the visualization process in a separate process."""
-        db_records = self.db_handler.get_all_records()  # Get a copy of the records to avoid shared memory issues
-        p = multiprocessing.Process(target=self.display_visualization_process, args=(db_records, self.embedding_queue))
-        p.daemon = True  # Process will terminate when the main program exits
-        p.start()
-        self.visualization_process = p  # Keep a reference to the process for later termination
-    
-    @staticmethod
-    def display_visualization_process(db_records, embedding_queue):
-        """Run visualization in a separate process using OpenCV window"""
-        import cv2
-        import matplotlib
-        matplotlib.use('Agg')  # Keep Agg backend for generating static images
-        import matplotlib.pyplot as plt
-        import numpy as np
-        from io import BytesIO
-        
-        signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ignore SIGINT in child processes
-        
-        visualizer = DatabaseVisualizer()  # Create a new visualizer in this process
-        visualizer.set_db_records(db_records)
-        
-        # Create OpenCV window
-        cv2.namedWindow('Face Recognition Embeddings', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Face Recognition Embeddings', 1200, 600)
-        
-        # Initialize the plot
-        fig = visualizer.visualize(mode='cli')  # This returns the figure
-        
-        def fig_to_opencv_image(fig):
-            """Convert matplotlib figure to OpenCV image"""
-            # Save figure to memory buffer
-            buf = BytesIO()
-            fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-            buf.seek(0)
-            
-            # Convert to numpy array
-            img_array = np.frombuffer(buf.getvalue(), dtype=np.uint8)
-            buf.close()
-            
-            # Decode to OpenCV image
-            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            return img
-        
-        # Display initial plot
-        img = fig_to_opencv_image(visualizer.global_fig)
-        cv2.imshow('Face Recognition Embeddings', img)
-        cv2.waitKey(1)  # Non-blocking wait
-        
-        while True:  # Append the new embeddings to the plot 
-            try:
-                embedding_vector, label = embedding_queue.get(timeout=0.1)  # Get new embedding from the queue
-                visualizer.add_embeddings_to_existing_plot(embeddings=[embedding_vector], labels=[label])
-                
-                # Convert updated plot to OpenCV image and display
-                img = fig_to_opencv_image(visualizer.global_fig)
-                cv2.imshow('Face Recognition Embeddings', img)
-                
-                # Check for window close or ESC key
-                key = cv2.waitKey(1) & 0xFF
-                if key == 27 or cv2.getWindowProperty('Face Recognition Embeddings', cv2.WND_PROP_VISIBLE) < 1:  # ESC key or window closed
-                    break
-                
-            except queue.Empty:  # No embedding available in the queue
-                # Still need to refresh the window
-                key = cv2.waitKey(100) & 0xFF  # 100ms wait
-                if key == 27 or cv2.getWindowProperty('Face Recognition Embeddings', cv2.WND_PROP_VISIBLE) < 1:
-                    break
-            except Exception as e:
-                print(f"Error in visualization process: {e}")
-                break
-        
-        # Cleanup
-        cv2.destroyAllWindows()
 
     def connect_vector_db_callback(self):
         identity = self.pipeline.get_by_name(self.vector_db_callback_name)
@@ -363,23 +264,6 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
 
         # Crop the frame to the detection area
         return frame[y_min:y_max, x_min:x_max]
-
-    def shutdown(self, signum=None, frame=None):
-        # Terminate the visualization process
-        if hasattr(self, 'visualization_process') and self.visualization_process:
-            try:
-                if self.visualization_process.is_alive():
-                    self.visualization_process.terminate()
-                    try:
-                        self.visualization_process.join(timeout=2)  # Add timeout
-                    except Exception as e:
-                        print(f"Error joining visualization process: {e}")
-                self.visualization_process = None  # Clear the reference to prevent multiple termination attempts
-            except Exception as e:
-                print(f"Error terminating visualization process: {e}")
-                self.visualization_process = None  # Clear reference anyway
-        # Call the parent class shutdown method to clean up the GStreamer pipeline and other resources
-        super().shutdown(signum=None, frame=None)  
 
     def add_task(self, task_type, **kwargs):
         """
@@ -463,13 +347,6 @@ class GStreamerFaceRecognitionApp(GStreamerApp):
             
             # anyway re-process for "double-check" after self.skip_frames X 3
             self.track_id_frame_count[track_id] = -3 * self.skip_frames  
-            
-            if self.options_menu.visualize and person['label'] != 'Unknown':  # If visualization is active, send the embedding to the visualization process - in case of new uknown person, don't plot - since the Uknown might be become later recognized in better frame after self.skip_frames try
-                try:
-                    self.embedding_queue.put((embedding_vector, person['label']), timeout=0.1)  # Use non-blocking put with a short timeout
-                except:
-                    pass  # Ignore if queue is full or other issues
-            
             if self.user_data.telegram_enabled:  # adding task to the worker queue
                 self.add_task('send_notification', name=person['label'], global_id=track_id, confidence=new_confidence, frame=frame)
 
