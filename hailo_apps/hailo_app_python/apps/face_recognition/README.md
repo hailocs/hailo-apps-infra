@@ -1,4 +1,4 @@
-# Face Recognition System: Beta Version
+# Face Recognition System: Beta Version - Only for Raspberry PI (might not work on X86)
 
 #### Please note that this is a beta version release; some features may be unstable.
 
