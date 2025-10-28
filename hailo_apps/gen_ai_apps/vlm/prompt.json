@@ -1,0 +1,14 @@
+{
+    "use_cases": {
+        "Package delivery": {
+            "options": ["Yes"],
+            "details": "Look at the image. Is there a cardboard box in it? If you are not sure answer no."
+        },
+        "Hat": {
+            "options": ["yes"],
+            "details": "Example: Image shows person wearing a hat. Output: yes. Now: Is there a person wearing a hat? Output 'yes' or 'no' only."
+        }
+    },
+    "hailo_system_prompt": "You are a helpful assistant.",
+    "hailo_user_prompt": "{details}"
+}
