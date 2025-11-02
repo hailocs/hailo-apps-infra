@@ -29,6 +29,11 @@ hailo8l:
   - arcface_mobilefacenet
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l_rpi/ssd_mobilenet_v1_visdrone.hef
 
+hailo10:
+  - "https://dev-public.hailo.ai/v5.1.0/blob/Qwen2-VL-2B-Instruct.hef"
+  - "https://dev-public.hailo.ai/v5.1.0/blob/Qwen2-1.5B-Instruct.hef"
+  - "https://dev-public.hailo.ai/v5.1.0/blob/Whisper-Base.hef"
+
 all:
   - yolov8s_pose
   - yolov8s

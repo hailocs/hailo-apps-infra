@@ -7,7 +7,6 @@ import tty
 import termios
 import threading
 import sys
-import os
 
 
 class TerminalRecorderApp:

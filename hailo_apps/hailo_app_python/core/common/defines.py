@@ -300,3 +300,19 @@ HAILO_LOGO_PHOTO_NAME = "logo.png"
 
 # Gstreamer pipeline defaults
 GST_VIDEO_SINK = "autovideosink"
+
+# Gen AI defaults
+VLM_MODEL_NAME_H10 = "Qwen2-VL-2B-Instruct"
+LLM_MODEL_NAME_H10 = "Qwen2-1.5B-Instruct"
+WHISPER_MODEL_NAME_H10 = "Whisper-Base"
+
+# Whisper defaults
+TARGET_SR = 16000  # Target sample rate for audio recording (in Hz)
+CHUNK_SIZE = 1024  # Number of frames per buffer
+TTS_ONNX_PATH = "en_US-amy-low.onnx"
+TTS_VOLUME = 0.8  # Volume (0.0 to 1.0)
+TTS_LENGTH_SCALE = 0.6  # Speech rate (lower is faster)
+TTS_NOISE_SCALE = 0.6  # Voice variability (lower is more consistent)
+TTS_W_SCALE = 0.6  # Pronunciation variability (lower is more consistent)
+LLM_PROMPT_PREFIX = "Respond in up to three sentences. "
+TEMP_WAV_DIR = "/tmp"

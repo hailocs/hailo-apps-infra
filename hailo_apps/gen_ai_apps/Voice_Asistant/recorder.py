@@ -5,12 +5,10 @@ Handles microphone recording, audio processing, and saving for debugging.
 
 from datetime import datetime
 import wave
-import librosa
 import numpy as np
 import pyaudio
-import os
-
 import config
+from hailo_apps.hailo_app_python.core.common.defines import TARGET_SR, CHUNK_SIZE
 
 
 class Recorder:
@@ -44,9 +42,9 @@ class Recorder:
         self.stream = self.p.open(
             format=pyaudio.paInt16,
             channels=1,
-            rate=config.TARGET_SR,
+            rate=TARGET_SR,
             input=True,
-            frames_per_buffer=config.CHUNK_SIZE,
+            frames_per_buffer=CHUNK_SIZE,
             stream_callback=self.callback
         )
         self.stream.start_stream()
@@ -76,10 +74,6 @@ class Recorder:
 
         # 2. Convert from 16-bit integers to float32, normalized between -1 and 1.
         audio_f32 = audio_s16.astype(np.float32) / 32768.0
-
-        # 3. Ensure the audio is mono. (Safeguard, as recording is already mono)
-        if audio_f32.ndim > 1:
-            audio_f32 = librosa.to_mono(audio_f32.reshape(1, -1))
 
         # 4. Ensure the audio data is in little-endian format, as expected by the model.
         audio_le = audio_f32.astype('<f4')

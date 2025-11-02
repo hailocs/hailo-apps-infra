@@ -1,31 +1,37 @@
 import threading
-import argparse
 import signal
+import os
 import cv2
 import sys
-from backend import Backend
 import concurrent.futures
-import os
-import subprocess
 import select
 from pathlib import Path
 os.environ["QT_QPA_PLATFORM"] = 'xcb'
-# from hailo_apps.hailo_app_python.core.common.core import get_default_parser
-# from hailo_apps.hailo_app_python.core.common.camera_utils import get_usb_video_devices
-# from hailo_apps.hailo_app_python.core.common.defines import BASIC_PIPELINES_VIDEO_EXAMPLE_NAME, RESOURCES_ROOT_PATH_DEFAULT, RESOURCES_VIDEOS_DIR_NAME, RPI_NAME_I, USB_CAMERA
+from backend import Backend
+from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path
+from hailo_apps.hailo_app_python.core.common.camera_utils import get_usb_video_devices, get_rpi_camera
+from hailo_apps.hailo_app_python.core.common.defines import (
+    VLM_MODEL_NAME_H10, 
+    RESOURCES_MODELS_DIR_NAME, 
+    BASIC_PIPELINES_VIDEO_EXAMPLE_NAME, 
+    RESOURCES_ROOT_PATH_DEFAULT, 
+    RESOURCES_VIDEOS_DIR_NAME, 
+    RPI_NAME_I, 
+    USB_CAMERA
+)
 
 class App:
-    def __init__(self, camera, cmaera_type):
+    def __init__(self, camera, camera_type):
         self.camera = camera
-        self.camera_type = cmaera_type
+        self.camera_type = camera_type
         self.running = True
         self.executor = concurrent.futures.ThreadPoolExecutor()
-        self.backend = Backend()
+        self.backend = Backend(hef_path=get_resource_path(resource_type=RESOURCES_MODELS_DIR_NAME, model=VLM_MODEL_NAME_H10))
         signal.signal(signal.SIGINT, self.signal_handler)
         self.frozen_frame = None
         self.waiting_for_question = True
         self.waiting_for_continue = False
-        self.user_question = ""
+        self.user_question = ''
 
     def signal_handler(self, sig, frame):
         print('')
@@ -46,16 +52,10 @@ class App:
         return None
 
     def show_video(self):
-        usb_devices = self.get_usb_video_devices()
-        if not usb_devices:
-            print("No USB video devices found.")
-            return
-        cap = cv2.VideoCapture(usb_devices[0])
-        # TODO
-        # if self.camera_type == RPI_NAME_I:
-        #     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        # else:
-        #     cap = cv2.VideoCapture(self.camera)
+        if self.camera_type == RPI_NAME_I:
+            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        else:
+            cap = cv2.VideoCapture(self.camera)
 
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -115,22 +115,6 @@ class App:
         cap.release()
         cv2.destroyAllWindows()
 
-    def get_usb_video_devices(self):
-        # TODO remove after integration to hailo apps
-        video_devices = [f'/dev/{device}' for device in os.listdir('/dev') if device.startswith('video')]
-        usb_video_devices = []
-        for device in video_devices:
-            try:
-                udevadm_cmd = ["udevadm", "info", "--query=all", "--name=" + device]
-                result = subprocess.run(udevadm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                output = result.stdout
-                if "ID_BUS=usb" in output and ":capture:" in output:
-                    device_number = int(device.split('video')[1])
-                    usb_video_devices.append(device_number)
-            except Exception as e:
-                print(f"Error checking device {device}: {e}")
-        return usb_video_devices
-
     def run(self):
         self.video_thread = threading.Thread(target=self.show_video)
         self.video_thread.start()
@@ -139,39 +123,21 @@ class App:
         except KeyboardInterrupt:
             self.stop()
             self.video_thread.join()
-
-def get_rpi_camera():
-    try:
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        if cap.isOpened():
-            width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-            if width > 0:
-                cap.release()
-                return 0
-        cap.release()
-    except Exception as e:
-        print(f"Error checking RPi camera: {e}")
-    return None
     
 if __name__ == "__main__":
-    # TODO
-    # parser = get_default_parser()
-    # options_menu = parser.parse_args()
-    # if options_menu.input is None:
-    #     video_source = str(Path(RESOURCES_ROOT_PATH_DEFAULT) / RESOURCES_VIDEOS_DIR_NAME / BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
-    # elif options_menu.input == USB_CAMERA:
-    #     video_source = get_usb_video_devices()
-    #     if video_source:
-    #         video_source = video_source[0]
-    # elif options_menu.input == RPI_NAME_I:
-    #     video_source = get_rpi_camera()
-    # if not video_source:
-    #     print(f'Provided argument "--input" is set to {options_menu.input}, however no available cameras found. Please connect a camera or specifiy different input method.')
-    #     exit(1)
-    parser = argparse.ArgumentParser(description='VLM App')
-    parser.add_argument("--camera", type=int, default=0, help='Camera ID (default: 0 for first USB camera)')
-    video_source = ''
-    # app = App(camera=video_source, cmaera_type=options_menu.input)
-    app = App(camera=video_source, cmaera_type='')
+    parser = get_default_parser()
+    options_menu = parser.parse_args()
+    if options_menu.input is None:
+        video_source = str(Path(RESOURCES_ROOT_PATH_DEFAULT) / RESOURCES_VIDEOS_DIR_NAME / BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
+    elif options_menu.input == USB_CAMERA:
+        video_source = get_usb_video_devices()
+        if video_source:
+            video_source = video_source[0]
+    elif options_menu.input == RPI_NAME_I:
+        video_source = get_rpi_camera()
+    if not video_source:
+        print(f'Provided argument "--input" is set to {options_menu.input}, however no available cameras found. Please connect a camera or specifiy different input method.')
+        exit(1)
+    app = App(camera=video_source, cmaera_type=options_menu.input)
     app.run()
     sys.exit(0)

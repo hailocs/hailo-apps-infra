@@ -2,6 +2,7 @@ import os
 import signal
 import subprocess
 import time
+import cv2
 
 from .defines import UDEV_CMD
 from .hailo_logger import get_logger
@@ -68,6 +69,18 @@ def get_usb_video_devices():
     hailo_logger.debug(f"USB video devices found: {usb_video_devices}")
     return usb_video_devices
 
+def get_rpi_camera():
+    try:
+        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        if cap.isOpened():
+            width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            if width > 0:
+                cap.release()
+                return 0
+        cap.release()
+    except Exception as e:
+        print(f"Error checking RPi camera: {e}")
+    return None
 
 def main():
     hailo_logger.debug("Running main() to check for USB cameras.")

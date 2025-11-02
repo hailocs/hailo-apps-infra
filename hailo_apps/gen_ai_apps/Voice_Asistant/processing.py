@@ -1,8 +1,8 @@
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM, Speech2Text
+from hailo_apps.hailo_app_python.core.common.core import get_resource_path
 import subprocess
 import numpy as np
-import os
 import wave
 from piper import PiperVoice
 from piper.voice import SynthesisConfig
@@ -12,9 +12,18 @@ import time
 import tempfile
 from io import StringIO
 from contextlib import redirect_stderr
-
-import config
-
+from hailo_apps.hailo_app_python.core.common.defines import (
+    RESOURCES_MODELS_DIR_NAME,
+    LLM_MODEL_NAME_H10,
+    WHISPER_MODEL_NAME_H10,
+    TTS_ONNX_PATH,
+    TTS_VOLUME,
+    TTS_LENGTH_SCALE,
+    TTS_NOISE_SCALE,
+    TTS_W_SCALE,
+    TEMP_WAV_DIR,
+    LLM_PROMPT_PREFIX
+)
 
 class AIPipeline:
     """
@@ -76,21 +85,20 @@ class AIPipeline:
     def _setup_hailo_ai(self):
         """Initializes Hailo AI platform components (VDevice, S2T, LLM)."""
         self._vdevice = VDevice()
-        self.speech2text = Speech2Text(
-            self._vdevice, config.WHISPER_HEF_PATH)
-        self.llm = LLM(self._vdevice, config.LLM_HEF_PATH)
+        self.speech2text = Speech2Text(self._vdevice, get_resource_path(resource_type=RESOURCES_MODELS_DIR_NAME, model=WHISPER_MODEL_NAME_H10))
+        self.llm = LLM(self._vdevice, get_resource_path(resource_type=RESOURCES_MODELS_DIR_NAME, model=LLM_MODEL_NAME_H10))
         self._recovery_seq = self.llm.get_generation_recovery_sequence()
 
     def _setup_tts(self):
         """Initializes the Text-to-Speech engine (Piper)."""
         # Suppress Piper warning messages
         with redirect_stderr(StringIO()):
-            self.piper_voice = PiperVoice.load(config.TTS_ONNX_PATH)
+            self.piper_voice = PiperVoice.load(TTS_ONNX_PATH)
             self.syn_config = SynthesisConfig(
-                volume=config.TTS_VOLUME,
-                length_scale=config.TTS_LENGTH_SCALE,
-                noise_scale=config.TTS_NOISE_SCALE,
-                noise_w_scale=config.TTS_W_SCALE,
+                volume=TTS_VOLUME,
+                length_scale=TTS_LENGTH_SCALE,
+                noise_scale=TTS_NOISE_SCALE,
+                noise_w_scale=TTS_W_SCALE,
                 normalize_audio=True
             )
 
@@ -144,7 +152,7 @@ class AIPipeline:
         try:
             # Create a temporary WAV file for the audio output.
             # This ensures that files are cleaned up properly.
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True, dir=config.TEMP_WAV_DIR) as temp_wav_file:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True, dir=TEMP_WAV_DIR) as temp_wav_file:
                 temp_wav_path = temp_wav_file.name
                 with wave.open(temp_wav_path, "wb") as wav_file:
                     # Suppress Piper warning messages during synthesis
@@ -203,7 +211,7 @@ class AIPipeline:
 
         # 3. Get a response from the language model.
         user_text = ''.join([seg.text for seg in segs])
-        prompt = config.LLM_PROMPT_PREFIX + user_text
+        prompt = LLM_PROMPT_PREFIX + user_text
 
         output = ''
         sentence_buffer = ''

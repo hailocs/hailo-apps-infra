@@ -52,7 +52,7 @@ def _hailo_inference_inner(image, prompts, vlm, max_tokens, temperature, seed):
         return {'answer': f'Error: {str(e)}', 'time': f"{time.time() - start_time:.2f} seconds"}
 
 class Backend:
-    def __init__(self, hef_path='Qwen2-VL-2B-Instruct.hef', max_tokens=200, temperature=0.1, seed=42):
+    def __init__(self, hef_path, max_tokens=200, temperature=0.1, seed=42):
         self.hef_path = hef_path
         self.max_tokens = max_tokens
         self.temperature = temperature
