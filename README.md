@@ -1,11 +1,18 @@
 ![Hailo Applications Infrastructure](doc/images/github_applications_infrastructure.png)
 
+# NEW: Locally running GenAI LLM's with the new Hailo 10H accelerator
+
+The Hailo-10H is the industry’s first edge AI accelerator to bring immersive generative AI capabilities directly to edge devices. Featuring 40 TOPS of INT4 performance and exceptional power efficiency, the Hailo-10H builds on the success of the market-leading Hailo-8 with a second-generation neural core architecture that is even more powerful and scalable.
+Hailo-10H includes a direct DDR interface, allowing it to scale for large models such as LLMs, VLMs, Stable Diffusion, and more.
+
+[GenAI Example applications](hailo_apps/gen_ai_apps/Examples/README.md)
+
 # Hailo Applications
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hailo-ai/hailo-apps-infra)
 
-Welcome to the Hailo Applications repository! This project provides a foundational infrastructure, reusable components, and practical examples for building and deploying high-performance AI applications using Hailo hardware accelerators.
+Welcome to the Hailo Applications repository! This project provides a foundational infrastructure, reusable components, and practical examples for building and deploying high-performance GenAI & AI applications using Hailo hardware accelerators: Hailo 8 & Hailo 10.
 
-It includes everything you need to get started with computer vision pipelines on both x86_64 Ubuntu systems and Raspberry Pi platforms.
+It includes everything you need to get started with locally running GenAI LLM models, as well as computer vision pipelines on both x86_64 Ubuntu systems and Raspberry Pi platforms.
 
 - **Ready-to-use AI pipelines** for object detection, pose estimation, and more.
 - **Modular infrastructure** for rapid development and custom applications.

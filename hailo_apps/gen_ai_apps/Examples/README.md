@@ -1,9 +1,15 @@
 # Hailo GenAI Chat Examples
 
-This directory contains three example applications demonstrating the use of Hailo's GenAI platform for different AI tasks: Large Language Models (LLM), Vision Language Models (VLM), and Speech-to-Text (Whisper).
+This directory contains three basic example applications demonstrating the use of Hailo's GenAI platform for different AI tasks: 
+- Large Language Models (LLM)
+- Vision Language Models (VLM)
+- Speech-to-Text (Whisper)
+
+For full GenAI applications, please see: [VLM full application](../VLM_Chat) and [Whisper full application](../Voice_Asistant/).
 
 ## Files Overview
 
+- Open WebUI example with Hailo Ollama API
 - `llm_chat.py` - Text-based conversational AI using Large Language Models
 - `vlm_chat.py` - Image analysis and description using Vision Language Models  
 - `whisper_chat.py` - Audio transcription using Whisper speech-to-text models
