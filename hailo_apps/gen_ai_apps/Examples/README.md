@@ -50,6 +50,8 @@ Models are specifically optimized for Hailo hardware, providing efficient, high-
         -d '{ "model": "qwen2:1.5b", "stream" : true }'
    ```
 
+   The models will be downloaded to: `~/usr/share/hailo-ollama/models/blob/`
+
 5. **Test the Model:**
    ```bash
    # Test the model via API
