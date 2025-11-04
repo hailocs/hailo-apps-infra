@@ -18,14 +18,14 @@ It includes everything you need to get started with locally running GenAI LLM mo
 - **Modular infrastructure** for rapid development and custom applications.
 - **Packaged as a Python library** for easy integration into your own projects.
 
-Visit the [Hailo Official Website](https://hailo.ai/) and [Hailo Community Forum](https://community.hailo.ai/) for more information.
+We have or [Hailo Community Forum](https://community.hailo.ai/) for more information, technical Q&A, support & discussions.
 
 ## Getting Started
 
 
 ### Hardware and Software Installation
 
-For detailed instructions on setting up your hardware, including both x86_64 Ubuntu systems and Raspberry Pi devices, please refer to the [Full Installation Guide](./doc/user_guide/installation.md#quick-start-automated-recommended). This guide covers everything from hardware setup to software installation, ensuring your environment is ready for deploying AI applications with Hailo hardware accelerators.
+Simple installation is below in the next section. For detailed instructions on setting up your hardware, including both x86_64 Ubuntu systems and Raspberry Pi devices, please refer to the [Full Installation Guide](./doc/user_guide/installation.md#quick-start-automated-recommended). This guide covers everything from hardware setup to software installation, ensuring your environment is ready for deploying AI applications with Hailo hardware accelerators.
 
 
 ### Hailo Apps Installation
