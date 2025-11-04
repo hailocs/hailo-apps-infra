@@ -25,7 +25,6 @@ An interactive voice-controlled AI assistant using Hailo's Speech-to-Text and La
 - `main.py` - Main application with terminal-based voice interface
 - `processing.py` - AI pipeline with S2T, LLM, and TTS integration
 - `recorder.py` - Audio recording and processing module
-- `config.py` - Configuration settings and parameters
 
 ## Usage
 

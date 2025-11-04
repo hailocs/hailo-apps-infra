@@ -22,7 +22,6 @@ An interactive computer vision application using Hailo's Vision Language Model (
 
 - `app.py` - Main application with interactive video processing
 - `backend.py` - Hailo VLM backend with multiprocessing support
-- `prompt.json` - Configuration for system prompts and use cases
 
 ## Usage
 

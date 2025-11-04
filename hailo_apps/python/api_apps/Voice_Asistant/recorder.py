@@ -8,7 +8,7 @@ import wave
 import numpy as np
 import pyaudio
 import config
-from hailo_apps.hailo_app_python.core.common.defines import TARGET_SR, CHUNK_SIZE
+from hailo_apps.python.core.common.defines import TARGET_SR, CHUNK_SIZE
 
 
 class Recorder:

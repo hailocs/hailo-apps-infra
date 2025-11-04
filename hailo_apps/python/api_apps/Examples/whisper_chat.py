@@ -1,7 +1,7 @@
 from hailo_platform import VDevice
 from hailo_platform.genai import Speech2Text
-from hailo_apps.hailo_app_python.core.common.core import get_resource_path
-from hailo_apps.hailo_app_python.core.common.defines import RESOURCES_MODELS_DIR_NAME, WHISPER_MODEL_NAME_H10
+from hailo_apps.python.core.common.core import get_resource_path
+from hailo_apps.python.core.common.defines import RESOURCES_MODELS_DIR_NAME, WHISPER_MODEL_NAME_H10
 import wave
 import numpy as np
 

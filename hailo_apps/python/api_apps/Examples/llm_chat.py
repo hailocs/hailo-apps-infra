@@ -1,7 +1,7 @@
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM
-from hailo_apps.hailo_app_python.core.common.core import get_resource_path
-from hailo_apps.hailo_app_python.core.common.defines import VLM_MODEL_NAME_H10, RESOURCES_MODELS_DIR_NAME
+from hailo_apps.python.core.common.core import get_resource_path
+from hailo_apps.python.core.common.defines import VLM_MODEL_NAME_H10, RESOURCES_MODELS_DIR_NAME
 
 vdevice = None
 llm = None

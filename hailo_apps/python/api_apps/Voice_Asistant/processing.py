@@ -1,6 +1,6 @@
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM, Speech2Text
-from hailo_apps.hailo_app_python.core.common.core import get_resource_path
+from hailo_apps.python.core.common.core import get_resource_path
 import subprocess
 import numpy as np
 import wave
@@ -12,7 +12,7 @@ import time
 import tempfile
 from io import StringIO
 from contextlib import redirect_stderr
-from hailo_apps.hailo_app_python.core.common.defines import (
+from hailo_apps.python.core.common.defines import (
     RESOURCES_MODELS_DIR_NAME,
     LLM_MODEL_NAME_H10,
     WHISPER_MODEL_NAME_H10,

@@ -8,9 +8,9 @@ import select
 from pathlib import Path
 os.environ["QT_QPA_PLATFORM"] = 'xcb'
 from backend import Backend
-from hailo_apps.hailo_app_python.core.common.core import get_default_parser, get_resource_path
-from hailo_apps.hailo_app_python.core.common.camera_utils import get_usb_video_devices, get_rpi_camera
-from hailo_apps.hailo_app_python.core.common.defines import (
+from hailo_apps.python.core.common.core import get_default_parser, get_resource_path
+from hailo_apps.python.core.common.camera_utils import get_usb_video_devices, get_rpi_camera
+from hailo_apps.python.core.common.defines import (
     VLM_MODEL_NAME_H10, 
     RESOURCES_MODELS_DIR_NAME, 
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME, 
