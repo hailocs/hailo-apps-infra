@@ -12,6 +12,13 @@ This guide provides comprehensive instructions for installing the Hailo Applicat
     - [Available Options](#available-options)
     - [Resource Groups](#resource-groups)
     - [Examples](#examples)
+  - [Installing Hailo Packages](#installing-hailo-packages)
+    - [Overview](#overview)
+    - [Usage](#usage-1)
+      - [Common Options](#common-options)
+    - [Examples](#examples-1)
+      - [Install for Hailo-8 on Ubuntu 24.04](#install-for-hailo-8-on-ubuntu-2404)
+      - [Download Only (No Installation)](#download-only-no-installation)
   - [Raspberry Pi Installation](#raspberry-pi-installation)
     - [Hardware Setup for RPi](#hardware-setup-for-rpi)
     - [Software Setup for RPi](#software-setup-for-rpi)
@@ -314,6 +321,6 @@ To remove the environment and downloaded resources:
 deactivate
 
 # Delete project files and logs
-sudo rm -rf venv_hailo_apps/ resources/ hailort.log .env hailo_apps.egg-info
+sudo rm -rf venv_hailo_apps/ resources/ hailort.log hailo_apps.egg-info
 ```
 To uninstall system packages, use `apt remove`.
