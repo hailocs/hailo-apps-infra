@@ -7,9 +7,9 @@ import logging
 import pytest
 
 # Local application-specific imports
-from hailo_apps.hailo_app_python.core.common.test_utils import run_pipeline_module_with_args, run_pipeline_pythonpath_with_args, run_pipeline_cli_with_args, get_pipeline_args
-from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
-from hailo_apps.hailo_app_python.core.common.defines import HAILO8_ARCH, HAILO8L_ARCH, RESOURCES_ROOT_PATH_DEFAULT
+from hailo_apps.python.core.common.test_utils import run_pipeline_module_with_args, run_pipeline_pythonpath_with_args, run_pipeline_cli_with_args, get_pipeline_args
+from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
+from hailo_apps.python.core.common.defines import HAILO8_ARCH, HAILO8L_ARCH, RESOURCES_ROOT_PATH_DEFAULT
 # endregion imports
 
 # Configure logging as needed.
@@ -23,8 +23,8 @@ os.makedirs(log_dir, exist_ok=True)
 def pipeline():
     return {
         'name': 'face_recognition',
-        'module': 'hailo_apps.hailo_app_python.apps.face_recognition.face_recognition',
-        'script': 'hailo_apps_infra/hailo_apps/apps/face_recognition/face_recognition.py',
+        'module': 'hailo_apps.python.pipeline_apps.face_recognition.face_recognition',
+        'script': 'hailo_apps/python/pipeline_apps/face_recognition/face_recognition.py',
         'cli': 'hailo-face-recon'
     }
 

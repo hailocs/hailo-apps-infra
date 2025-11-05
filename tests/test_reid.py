@@ -7,14 +7,14 @@ import logging
 import pytest
 
 # Local application-specific imports
-from hailo_apps.hailo_app_python.core.common.test_utils import (
+from hailo_apps.python.core.common.test_utils import (
     run_pipeline_module_with_args, 
     run_pipeline_pythonpath_with_args, 
     run_pipeline_cli_with_args, 
     get_pipeline_args
 )
-from hailo_apps.hailo_app_python.core.common.installation_utils import detect_hailo_arch
-from hailo_apps.hailo_app_python.core.common.defines import HAILO8_ARCH, HAILO8L_ARCH, RESOURCES_ROOT_PATH_DEFAULT
+from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
+from hailo_apps.python.core.common.defines import HAILO8_ARCH, HAILO8L_ARCH, RESOURCES_ROOT_PATH_DEFAULT
 # endregion imports
 
 # Configure logging as needed.
@@ -28,8 +28,8 @@ os.makedirs(log_dir, exist_ok=True)
 def pipeline():
     return {
         "name": "reid_multisource",
-        "module": "hailo_apps.hailo_app_python.apps.reid_multisource.reid_multisource_pipeline",
-        "script": "hailo_apps/hailo_app_python/apps/reid_multisource/reid_multisource_pipeline.py",
+        "module": "hailo_apps.python.pipeline_apps.reid_multisource.reid_multisource_pipeline",
+        "script": "hailo_apps/python/pipeline_apps/reid_multisource/reid_multisource_pipeline.py",
         "cli": "hailo-reid"
     }
 
