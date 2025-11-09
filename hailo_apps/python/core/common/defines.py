@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 # Base Defaults
 HAILO8_ARCH = "hailo8"
@@ -17,6 +18,7 @@ HAILORT_PACKAGE = "hailort"
 HAILO_FILE_EXTENSION = ".hef"
 MODEL_ZOO_URL = "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled"
 RESOURCES_ROOT_PATH_DEFAULT = "/usr/local/hailo/resources"  # Do Not Change!
+SHARED_VDEVICE_GROUP_ID = "SHARED"  # Do Not Change!
 
 # Core defaults
 ARM_POSSIBLE_NAME = ["arm", "aarch64"]
@@ -46,13 +48,42 @@ VENV_CREATE_CMD = "python3 -m venv"
 # Base project paths
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
-# Default config paths (now in top-level “config” folder)
-DEFAULT_CONFIG_PATH = str(REPO_ROOT / "config" / "config.yaml")
-DEFAULT_RESOURCES_CONFIG_PATH = str(REPO_ROOT / "config" / "resources_config.yaml")
+
+def _get_package_config_path(filename: str) -> Path | None:
+    """Get config file path from package location (when installed via pip)."""
+    try:
+        import hailo_apps.config
+        package_dir = Path(hailo_apps.config.__file__).parent
+        config_path = package_dir / filename
+        if config_path.exists():
+            return config_path
+    except (ImportError, AttributeError):
+        pass
+    return None
+
+
+def _get_repo_config_path(filename: str) -> Path:
+    """Get config file path from repo location (when running from source)."""
+    return REPO_ROOT / "hailo_apps" / "config" / filename
+
+
+def _get_config_path(filename: str) -> str:
+    """Get config path: first check package location, then fall back to repo location."""
+    # First try package location (when installed via pip)
+    package_path = _get_package_config_path(filename)
+    if package_path:
+        return str(package_path)
+    # Fall back to repo location (when running from source)
+    return str(_get_repo_config_path(filename))
+
+
+# Default config paths - checks package location first, then repo location
+DEFAULT_CONFIG_PATH = _get_config_path("config.yaml")
+DEFAULT_RESOURCES_CONFIG_PATH = _get_config_path("resources_config.yaml")
 
 # Symlink, dotenv, local resources defaults
 DEFAULT_RESOURCES_SYMLINK_PATH = str(REPO_ROOT / "resources")  # e.g. created by post-install
-DEFAULT_DOTENV_PATH = str(REPO_ROOT / ".env")  # your env file lives here
+DEFAULT_DOTENV_PATH = "/usr/local/hailo/resources/.env"  # your env file lives here
 DEFAULT_LOCAL_RESOURCES_PATH = str(REPO_ROOT / "local_resources")  # bundled GIFs, JSON, etc.
 
 # Supported config options
@@ -125,6 +156,7 @@ RESOURCES_GROUPS_MAP = [
     RESOURCES_GROUP_ALL,
     RESOURCES_GROUP_HAILO8,
     RESOURCES_GROUP_HAILO8L,
+    RESOURCES_GROUP_HAILO10H,
     RESOURCES_GROUP_RETRAIN,
 ]
 
@@ -302,8 +334,8 @@ HAILO_LOGO_PHOTO_NAME = "logo.png"
 GST_VIDEO_SINK = "autovideosink"
 
 # Gen AI defaults
-VLM_MODEL_NAME_H10 = "Qwen2-VL-2B-Instruct"
-LLM_MODEL_NAME_H10 = "Qwen2-1.5B-Instruct"
+VLM_MODEL_NAME_H10 = "Qwen2-VL-2B-Instruct.hef"
+LLM_MODEL_NAME_H10 = "Qwen2.5-1.5B-Instruct.hef"
 WHISPER_MODEL_NAME_H10 = "Whisper-Base"
 
 # Whisper defaults
