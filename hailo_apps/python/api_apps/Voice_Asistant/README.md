@@ -2,6 +2,22 @@
 
 An interactive voice-controlled AI assistant using Hailo's Speech-to-Text and Large Language Model for real-time audio processing and conversational AI.
 
+## Required Dependency!
+
+Piper TTS (Text To Speach) requires downloading the voice files: 2 Files will be downloaded - an .onnx file (~65MB) & a .json file.
+For more details please see: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md
+
+   ```bash
+   cd ~/hailo_apps/python/api_apps/Voice_Asistant
+   python3 -m piper.download_voices en_US-amy-low
+   ```
+
+In case differen voice selected, please modify:
+   ```bash
+   In file: ~/hailo-apps-infra/hailo_apps/python/api_apps/Voice_Asistant/processing.py
+   self.piper_voice = PiperVoice.load(TTS_ONNX_PATH)
+   ```
+
 ## Features
 
 - **Real-time speech processing** with Hailo AI acceleration
