@@ -1,21 +1,23 @@
+import os
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
+import sys
+import ctypes
+libc = ctypes.CDLL(None)
+sys.stderr.flush()
+libc.freopen(b'/dev/null', b'w', ctypes.c_void_p.in_dll(libc, 'stderr'))
+
+import cv2
 import threading
 import signal
-import os
-import cv2
-import sys
 import concurrent.futures
 import select
-from pathlib import Path
-os.environ["QT_QPA_PLATFORM"] = 'xcb'
 from backend import Backend
 from hailo_apps.python.core.common.core import get_default_parser, get_resource_path
 from hailo_apps.python.core.common.camera_utils import get_usb_video_devices, get_rpi_camera
 from hailo_apps.python.core.common.defines import (
     VLM_MODEL_NAME_H10, 
-    RESOURCES_MODELS_DIR_NAME, 
-    BASIC_PIPELINES_VIDEO_EXAMPLE_NAME, 
-    RESOURCES_ROOT_PATH_DEFAULT, 
-    RESOURCES_VIDEOS_DIR_NAME, 
+    RESOURCES_MODELS_DIR_NAME,
     RPI_NAME_I, 
     USB_CAMERA
 )
