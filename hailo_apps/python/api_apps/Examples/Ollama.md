@@ -4,7 +4,7 @@ The Hailo Model Zoo GenAI is a curated collection of pre-trained models and exam
 
 Ollama simplifies running large language models locally by managing model downloads, deployments, and interactions through a convenient REST API.
 
-Models are specifically optimized for Hailo hardware, providing efficient, high-performance inference tailored for GenAI tasks: `https://github.com/hailo-ai/hailo_model_zoo_genai`
+Models are specifically optimized for Hailo hardware, providing efficient, high-performance inference tailored for GenAI tasks. For full details: https://github.com/hailo-ai/hailo_model_zoo_genai?tab=readme-ov-file#basic-usage
 
 
 #### Installation and Setup
