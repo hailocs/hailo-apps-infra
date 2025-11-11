@@ -9,6 +9,7 @@ For more details please see: https://github.com/OHF-Voice/piper1-gpl/blob/main/d
 
    ```bash
    cd ~/hailo_apps/python/api_apps/Voice_Asistant
+   pip install piper-tts
    python3 -m piper.download_voices en_US-amy-low
    ```
 
