@@ -46,19 +46,24 @@ sudo systemctl enable docker
 
 ## Open WebUI Installation
 
-Follow this guide: https://docs.openwebui.com/getting-started/quick-start
+Based on this guide: https://docs.openwebui.com/getting-started/quick-start
 
-Download and run the slim variant:
+- Download and run the slim variant
+- **Important** Run with host network
 
 ```bash
 docker pull ghcr.io/open-webui/open-webui:main-slim
 
-docker run -d -p 3000:8080 -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main-slim
+# Run with host network (container shares host's network)
+docker run -d --network host \
+  -v open-webui:/app/backend/data \
+  --name open-webui \
+  ghcr.io/open-webui/open-webui:main-slim
 ```
 
 ### Configure Open WebUI
 
-1. Open your browser and navigate to the Open WebUI interface at http://localhost:3000
+1. Open your browser and navigate to the Open WebUI interface at http://localhost:8080
 
 2. In **Settings → Admin Settings → Connections**, add the Hailo-Ollama API URL: 
    ```
