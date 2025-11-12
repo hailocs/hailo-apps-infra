@@ -24,9 +24,7 @@ dependencies = [
     "lancedb",
     "Pillow",
     "ruff>=0.5.7",
-    "pre-commit>=3.7.0",
-    "PyAudio",
-    "piper-tts"
+    "pre-commit>=3.7.0"
 ]
 
 [project.scripts]
