@@ -37,4 +37,4 @@ docker run -d --network host \
    - Set "Connection Type" to "Local"
    - Set "Auth" to "None"
 
-Now in the chat, select the `qwen2:1.5b` model from the available models.
+Now in the chat, select one of the models served by Hailo-Ollama from the available models.

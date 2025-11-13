@@ -14,7 +14,8 @@ HAILO_TAPPAS_CORE_PYTHON_NAMES = [
     "tappas-core-python-binding",
     HAILO_TAPPAS_CORE,
 ]
-HAILORT_PACKAGE = "h10-hailort"
+HAILORT_PACKAGE_NAME = "hailort"
+HAILORT_PACKAGE_NAME_RPI = "h10-hailort"
 HAILO_FILE_EXTENSION = ".hef"
 MODEL_ZOO_URL = "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled"
 RESOURCES_ROOT_PATH_DEFAULT = "/usr/local/hailo/resources"  # Do Not Change!
