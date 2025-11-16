@@ -19,7 +19,8 @@ from .defines import (
     HAILO_TAPPAS,
     HAILO_TAPPAS_CORE,
     HAILO_TAPPAS_CORE_PYTHON_NAMES,
-    HAILORT_PACKAGE,
+    HAILORT_PACKAGE_NAME,
+    HAILORT_PACKAGE_NAME_RPI,
     LINUX_SYSTEM_NAME_I,
     PIP_CMD,
     RPI_NAME_I,
@@ -103,13 +104,13 @@ def detect_hailo_arch() -> str | None:
             return None
         for line in res.stdout.splitlines():
             if HAILO8L_ARCH_CAPS in line:
-                hailo_logger.info("Detected Hailo architecture: HAILO8L")
+                hailo_logger.debug("Detected Hailo architecture: HAILO8L")
                 return HAILO8L_ARCH
             if HAILO8_ARCH_CAPS in line:
-                hailo_logger.info("Detected Hailo architecture: HAILO8")
+                hailo_logger.debug("Detected Hailo architecture: HAILO8")
                 return HAILO8_ARCH
             if HAILO10H_ARCH_CAPS in line or HAILO15H_ARCH_CAPS in line:
-                hailo_logger.info("Detected Hailo architecture: HAILO10H")
+                hailo_logger.debug("Detected Hailo architecture: HAILO10H")
                 return HAILO10H_ARCH
     except Exception as e:
         hailo_logger.exception(f"Error detecting Hailo architecture: {e}")
@@ -188,9 +189,20 @@ def create_symlink(src: str, dst: str) -> None:
     os.symlink(src, dst)
 
 
+def get_hailort_package_name() -> str:
+    """Get the appropriate HailoRT package name based on host architecture."""
+    host_arch = detect_host_arch()
+    if host_arch == RPI_NAME_I:
+        hailo_logger.debug(f"Using RPI-specific HailoRT package: {HAILORT_PACKAGE_NAME_RPI}")
+        return HAILORT_PACKAGE_NAME_RPI
+    hailo_logger.debug(f"Using default HailoRT package: {HAILORT_PACKAGE_NAME}")
+    return HAILORT_PACKAGE_NAME
+
+
 def auto_detect_hailort_python_bindings() -> bool:
     hailo_logger.debug("Detecting HailoRT Python bindings.")
-    if detect_pip_package_installed(HAILORT_PACKAGE):
+    pkg_name = get_hailort_package_name()
+    if detect_pip_package_installed(pkg_name):
         hailo_logger.info("Detected HailoRT Python bindings installed.")
         return True
     hailo_logger.warning("HailoRT Python bindings not found.")
@@ -199,8 +211,9 @@ def auto_detect_hailort_python_bindings() -> bool:
 
 def auto_detect_hailort_version() -> str:
     hailo_logger.debug("Detecting installed HailoRT version.")
-    if detect_pkg_installed(HAILORT_PACKAGE):
-        return detect_system_pkg_version(HAILORT_PACKAGE)
+    pkg_name = get_hailort_package_name()
+    if detect_pkg_installed(pkg_name):
+        return detect_system_pkg_version(pkg_name)
     else:
         hailo_logger.warning("Could not detect HailoRT version, please install HailoRT.")
         return None
