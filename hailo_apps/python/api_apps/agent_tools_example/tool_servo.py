@@ -9,8 +9,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from hailo_apps.python.api_apps.agent_tools_example.hardware_interface import create_servo_controller
-from hailo_apps.python.api_apps.agent_tools_example import config
+# Make imports more robust
+try:
+    # Try relative import first
+    from .hardware_interface import create_servo_controller
+    from . import config
+except ImportError:
+    # Fallback to absolute import if relative fails
+    from hardware_interface import create_servo_controller
+    import config
 
 name: str = "servo"
 
@@ -28,11 +35,12 @@ description: str = (
     "The tool supports two modes: 'absolute' (set to specific angle) and 'relative' (move by delta angle). "
     "Angle values are in degrees. Valid angle range is -90 to 90 degrees. "
     "Examples: 'move servo to 45 degrees' → mode='absolute', angle=45. "
-    "Examples: 'rotate servo 30 degrees' → mode='relative', angle=30. "
+    "Examples: 'rotate servo by 30 degrees' → mode='relative', angle=30. "
     "Examples: 'set servo to -45' → mode='absolute', angle=-45. "
     "Examples: 'move servo by -20 degrees' → mode='relative', angle=-20. "
     "Examples: 'turn servo left 15 degrees' → mode='relative', angle=-15. "
-    "Examples: 'position servo at center' → mode='absolute', angle=0."
+    "Examples: 'position servo at center' → mode='absolute', angle=0. "
+    "Examples: 'home servo' → mode='absolute', angle=0."
 )
 
 # Initialize servo controller (hardware or simulator) only when tool is selected
@@ -76,6 +84,18 @@ def _get_servo_controller() -> Any:
     if not _initialized:
         initialize_tool()
     return _servo_controller
+
+
+def cleanup_tool() -> None:
+    """Clean up servo controller resources."""
+    global _servo_controller
+    if _servo_controller is not None and hasattr(_servo_controller, "cleanup"):
+        try:
+            _servo_controller.cleanup()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug("Error during servo controller cleanup: %s", e)
 
 
 # Minimal JSON-like schema to assist prompting/validation
@@ -179,8 +199,7 @@ def run(input_dict: dict[str, Any]) -> dict[str, Any]:
             - angle: Angle value in degrees (required)
 
     Returns:
-        Dictionary with 'ok' and 'angle' (if successful) or 'error' (if failed).
-        On success, includes current angle and message.
+        Dictionary with 'ok' and 'result' (if successful) or 'error' (if failed).
     """
     validated = _validate_input(input_dict)
     if not validated.get("ok"):
@@ -211,14 +230,13 @@ def run(input_dict: dict[str, Any]) -> dict[str, Any]:
 
         # Build message
         if angle != clamped_angle:
-            message = f"Servo moved to {current_angle:.1f}° (requested {angle:.1f}° was clamped to valid range)"
+            result = f"Servo moved to {current_angle:.1f}° (requested {angle:.1f}° was clamped to valid range)"
         else:
-            message = f"Servo moved to {current_angle:.1f}°"
+            result = f"Servo moved to {current_angle:.1f}°"
 
         return {
             "ok": True,
-            "angle": current_angle,
-            "message": message,
+            "result": result,
         }
 
     # Handle relative mode
@@ -233,13 +251,12 @@ def run(input_dict: dict[str, Any]) -> dict[str, Any]:
 
         # Build message
         if target_angle != clamped_angle:
-            message = f"Servo moved by {angle:.1f}° to {final_angle:.1f}° (requested position {target_angle:.1f}° was clamped to valid range)"
+            result = f"Servo moved by {angle:.1f}° to {final_angle:.1f}° (requested position {target_angle:.1f}° was clamped to valid range)"
         else:
-            message = f"Servo moved by {angle:.1f}° to {final_angle:.1f}°"
+            result = f"Servo moved by {angle:.1f}° to {final_angle:.1f}°"
 
         return {
             "ok": True,
-            "angle": final_angle,
-            "message": message,
+            "result": result,
         }
 

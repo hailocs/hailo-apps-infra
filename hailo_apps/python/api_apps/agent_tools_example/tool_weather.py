@@ -8,6 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
+# Make imports more robust
+try:
+    # Try relative import first
+    from .weather_api_utils import get_current_temperature, get_weather_forecast
+except ImportError:
+    # Fallback to absolute import if relative fails (e.g., when run directly)
+    from weather_api_utils import get_current_temperature, get_weather_forecast
+
 # Temperature unit configuration
 # Default to Celsius. Note: Can be changed to "fahrenheit" if needed.
 TEMPERATURE_UNIT: str = "celsius"
@@ -24,7 +32,7 @@ description: str = (
     "CRITICAL: Use this tool ONLY when the user explicitly asks about weather, temperature, or rain. "
     "If you don't know the location of the query, do not call this tool. Ask the user for the location."
     "Supported requests: current temperature, forecasts for future days, rain/precipitation queries. "
-    "For dates: use the 'future_days' parameter. Examples: 'tomorrow' -> future_days=1, 'in 3 days' -> future_days=3, 'today' -> future_days=0 or omit. "
+    "For dates: use the 'future_days' parameter (e.g., 'tomorrow' -> future_days=1, 'in 3 days' -> future_days=3, 'today' -> future_days=0). "
     "Set include_rain=true when the user asks about rain or precipitation."
 )
 
@@ -120,15 +128,6 @@ def run(input_data: dict[str, Any]) -> dict[str, Any]:
     location = data["location"]
     future_days = data.get("future_days", 0)
     include_rain = data.get("include_rain", False)
-
-    # Import weather API utility
-    try:
-        from .weather_api_utils import get_current_temperature, get_weather_forecast
-    except ImportError:
-        return {
-            "ok": False,
-            "error": "Weather API utilities not available. Ensure weather_api_utils.py is present."
-        }
 
     # Call the weather API
     try:
