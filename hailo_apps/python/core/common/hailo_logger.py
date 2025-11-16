@@ -103,6 +103,8 @@ class _RunContextFilter(logging.Filter):
 def get_logger(name: str) -> logging.Logger:
     """Creates or retrieves a logger configured according to LOG_LEVEL from .env.
     Falls back to INFO if not specified or invalid.
+
+    Uses a simple format: "%(levelname)s: %(message)s" for cleaner output.
     """
     # Read log level from .env, default to INFO
     log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -118,11 +120,11 @@ def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.hasHandlers():
         logger.setLevel(log_level)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        handler = logging.StreamHandler(sys.stdout)
+        # Simple format: just level and message (no timestamp, name, run_id clutter)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
         handler.setFormatter(formatter)
+        handler.setLevel(log_level)
         logger.addHandler(handler)
         logger.propagate = False
 
