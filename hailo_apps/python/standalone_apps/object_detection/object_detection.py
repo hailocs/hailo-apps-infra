@@ -117,7 +117,8 @@ def run_inference_pipeline(net, input, batch_size, labels, output_dir,
     Initialize queues, HailoAsyncInference instance, and run the inference.
     """
     labels = get_labels(labels)
-    config_data = load_json_file("config.json")
+    config_path = Path(__file__).parent / "config.json"
+    config_data = load_json_file(str(config_path))
 
     # Initialize input source from string: "camera", video file, or image folder.
     cap, images = init_input_source(input, batch_size, resolution)
