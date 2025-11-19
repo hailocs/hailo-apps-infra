@@ -251,6 +251,26 @@ SCRFD_8_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
 SCRFD_10_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
 SCRFD_8L_POSTPROCESS_FUNCTION = "scrfd_2_5g_letterbox"
 
+# Clip pipeline defaults
+CLIP_PIPELINE = "clip"
+CLIP_MODEL_NAME_H8 = "clip_resnet_50x4"
+CLIP_MODEL_NAME_H8L = "clip_resnet_50x4_h8l"
+CLIP_MODEL_NAME_10H = "TBD"
+
+CLIP_DETECTION_PIPELINE = "clip_detection"
+CLIP_DETECTION_MODEL_NAME_H8 = "yolov5s_personface"
+CLIP_DETECTION_MODEL_NAME_H8L = "yolov5s_personface_h8l_pi"
+CLIP_DETECTION_MODEL_NAME_10H = "TBD"
+
+CLIP_APP_TITLE = "Hailo CLIP App"
+CLIP_VIDEO_NAME = "clip_video.mp4"
+
+CLIP_DETECTION_JSON_NAME = "yolov5s_personface.json"
+
+CLIP_DETECTION_POSTPROCESS_SO_FILENAME = 'libyolo_post.so'
+CLIP_POSTPROCESS_SO_FILENAME = 'libclip_post.so'
+CLIP_CROPPER_POSTPROCESS_SO_FILENAME = 'libclip_croppers.so'
+
 # Multisource pipeline defaults
 MULTI_SOURCE_APP_TITLE = "Hailo Multisource App"
 MULTI_SOURCE_PARAMS_JSON_NAME = "multisource_params.json"
