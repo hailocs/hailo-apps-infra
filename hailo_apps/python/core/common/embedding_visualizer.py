@@ -20,11 +20,9 @@ except ImportError:
 # Local application/library imports
 from db_handler import DatabaseHandler, Record
 
-from hailo_apps.python.core.common.core import get_resource_path
 from hailo_apps.python.core.common.defines import (
     FACE_RECON_DATABASE_DIR_NAME,
-    FACE_RECON_DIR_NAME,
-    FACE_RECON_SAMPLES_DIR_NAME,
+    FACE_RECON_SAMPLES_DIR_NAME
 )
 
 
@@ -136,13 +134,7 @@ if __name__ == "__main__":
         table_name="persons",
         schema=Record,
         threshold=0.35,
-        database_dir=get_resource_path(
-            pipeline_name=None,
-            resource_type=FACE_RECON_DIR_NAME,
-            model=FACE_RECON_DATABASE_DIR_NAME,
-        ),
-        samples_dir=get_resource_path(
-            pipeline_name=None, resource_type=FACE_RECON_DIR_NAME, model=FACE_RECON_SAMPLES_DIR_NAME
-        ),
+        database_dir=os.path.join('../../pipeline_apps/', FACE_RECON_DATABASE_DIR_NAME),
+        samples_dir=os.path.join('../../pipeline_apps/', FACE_RECON_SAMPLES_DIR_NAME)
     )
     visualize_embeddings(db_handler)
