@@ -36,7 +36,7 @@ from hailo_apps.python.core.common.defines import (
     CLIP_PIPELINE,
     CLIP_DETECTION_PIPELINE,
     CLIP_DETECTION_JSON_NAME,
-    CLIP_DETECTION_POSTPROCESS_SO_FILENAME,
+    DETECTION_POSTPROCESS_SO_FILENAME,
     CLIP_POSTPROCESS_SO_FILENAME,
     CLIP_CROPPER_POSTPROCESS_SO_FILENAME,
 )
@@ -53,9 +53,9 @@ class GStreamerClipApp(GStreamerApp):
         parser.add_argument("--disable-runtime-prompts", action="store_true", help="When set, app will not support runtime prompts. Default is False.")
         super().__init__(parser, user_data)
         if self.options_menu.input is None:
-            self.json_file = os.path.join(self.current_path, 'example_embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
+            self.json_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'example_embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
         else:
-            self.json_file = os.path.join(self.current_path, 'embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
+            self.json_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
         self.app_callback = app_callback
         self.detector = self.options_menu.detector
         self.text_image_matcher = text_image_matcher
@@ -73,18 +73,18 @@ class GStreamerClipApp(GStreamerApp):
             self.arch = self.options_menu.arch
 
         if BASIC_PIPELINES_VIDEO_EXAMPLE_NAME in self.video_source:
-            self.video_source = get_resource_path(pipeline_name=None, resource_type=RESOURCES_VIDEOS_DIR_NAME, model=CLIP_VIDEO_NAME)
+            self.video_source = get_resource_path(pipeline_name=None, resource_type=RESOURCES_VIDEOS_DIR_NAME, model=BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
 
         self.hef_path_detection = get_resource_path(pipeline_name=CLIP_DETECTION_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
         self.hef_path_clip = get_resource_path(pipeline_name=CLIP_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
 
         self.detection_config_json_path = get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=CLIP_DETECTION_JSON_NAME)
 
-        self.post_process_so_detection = get_resource_path(pipeline_name=None, resource_type=RESOURCES_SO_DIR_NAME, model=CLIP_DETECTION_POSTPROCESS_SO_FILENAME)
+        self.post_process_so_detection = get_resource_path(pipeline_name=None, resource_type=RESOURCES_SO_DIR_NAME, model=DETECTION_POSTPROCESS_SO_FILENAME)
         self.post_process_so_clip = get_resource_path(pipeline_name=None, resource_type=RESOURCES_SO_DIR_NAME, model=CLIP_POSTPROCESS_SO_FILENAME)
         self.post_process_so_cropper = get_resource_path(pipeline_name=None, resource_type=RESOURCES_SO_DIR_NAME, model=CLIP_CROPPER_POSTPROCESS_SO_FILENAME)
 
-        self.detection_post_process_function_name = 'yolov5_personface_letterbox'
+        self.detection_post_process_function_name = 'yolov5s_personface'  # 'yolov5_personface_letterbox'
         self.clip_post_process_function_name = 'filter'
         if self.options_menu.detector == 'person':
             self.class_id = 1
@@ -102,11 +102,11 @@ class GStreamerClipApp(GStreamerApp):
         self.win.connect('destroy', self.on_destroy)
         self.win.show_all()
         signal.signal(signal.SIGINT, signal.SIG_DFL)
-        Gtk.main()
+        # Gtk.main()
         super().run()
         
     def on_destroy(self, window):
-        window.quit_button_clicked(None)
+        window.quit_button_clicked()
 
     def get_pipeline_string(self):
         source_pipeline = SOURCE_PIPELINE(self.video_source, self.video_width, self.video_height, frame_rate=self.frame_rate, sync=self.sync)
@@ -150,7 +150,7 @@ class GStreamerClipApp(GStreamerApp):
             clip_t. ! {QUEUE(name="clip_muxer_queue")} ! videoscale n-threads=4 qos=false ! {clip_pipeline} ! clip_hmux.sink_1 \
             clip_hmux. ! {QUEUE(name="clip_hmux_queue")} '
 
-        display_pipeline = DISPLAY_PIPELINE(sync=self.sync, show_fps=self.show_fps)
+        display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
 
         user_callback_pipeline = USER_CALLBACK_PIPELINE()
 

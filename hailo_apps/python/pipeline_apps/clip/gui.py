@@ -149,8 +149,11 @@ class AppWindow(Gtk.Window):
         for label in self.text_prefix_labels:
             label.set_text(new_text_prefix)
 
-    def quit_button_clicked(self):
-        self.shutdown()
+    def quit_button_clicked(self, widget=None):
+        Gtk.main_quit()
+
+    def shutdown(self):
+        Gtk.main_quit()
 
     def on_text_box_updated(self, widget, event, idx):
         """Callback function for text box updates."""

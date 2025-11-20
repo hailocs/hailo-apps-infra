@@ -1,7 +1,6 @@
 # region imports
 # Standard library imports
 
-
 # Third-party imports
 import numpy as np
 import gi
@@ -13,20 +12,23 @@ import hailo
 from hailo_apps.python.core.common.buffer_utils import get_numpy_from_buffer_efficient, get_caps_from_pad
 from hailo_apps.python.core.gstreamer.gstreamer_app import app_callback_class
 from hailo_apps.python.pipeline_apps.clip.clip_pipeline import GStreamerClipApp
-from hailo_apps.python.pipeline_apps.clip import text_image_matcher
+from hailo_apps.python.pipeline_apps.clip.text_image_matcher import text_image_matcher
 # endregion
 
-def app_callback(self, pad, info, user_data):
+def app_callback(pad, info, user_data):
     buffer = info.get_buffer()
     if buffer is None:
         return Gst.PadProbeReturn.OK
     format, width, height = get_caps_from_pad(pad)
     video_frame = get_numpy_from_buffer_efficient(buffer, format, width, height)
-    top_level_matrix = video_frame.roi.get_objects_typed(hailo.HAILO_MATRIX)
+    roi = hailo.get_roi_from_buffer(buffer)
+    if roi is None:
+        return Gst.PadProbeReturn.OK
+    top_level_matrix = roi.get_objects_typed(hailo.HAILO_MATRIX)
     if len(top_level_matrix) == 0:
-        detections = video_frame.roi.get_objects_typed(hailo.HAILO_DETECTION)
+        detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
     else:
-        detections = [video_frame.roi] # Use the ROI as the detection
+        detections = [roi]  # Use the ROI as the detection
     embeddings_np = None
     used_detection = []
     track_id_focus = text_image_matcher.track_id_focus # Used to focus on a specific track_id
@@ -65,7 +67,7 @@ def app_callback(self, pad, info, user_data):
 
 def main():
     user_data = app_callback_class()
-    app = GStreamerClipApp(user_data, app_callback)
+    app = GStreamerClipApp(app_callback, user_data)
     app.run()
     
 if __name__ == "__main__":
