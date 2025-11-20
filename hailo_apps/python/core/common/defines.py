@@ -255,12 +255,12 @@ SCRFD_8L_POSTPROCESS_FUNCTION = "scrfd_2_5g_letterbox"
 CLIP_PIPELINE = "clip"
 CLIP_MODEL_NAME_H8 = "clip_resnet_50x4"
 CLIP_MODEL_NAME_H8L = "clip_resnet_50x4_h8l"
-CLIP_MODEL_NAME_10H = "TBD"
+CLIP_MODEL_NAME_10H = "resnet_v1_50"  # TODO "clip_resnet_50x4_image_encoder"  
 
 CLIP_DETECTION_PIPELINE = "clip_detection"
 CLIP_DETECTION_MODEL_NAME_H8 = "yolov5s_personface"
 CLIP_DETECTION_MODEL_NAME_H8L = "yolov5s_personface_h8l_pi"
-CLIP_DETECTION_MODEL_NAME_10H = "TBD"
+CLIP_DETECTION_MODEL_NAME_10H = "yolov5s"  # TODO
 
 CLIP_APP_TITLE = "Hailo CLIP App"
 CLIP_VIDEO_NAME = "clip_video.mp4"

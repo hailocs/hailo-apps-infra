@@ -1,20 +1,8 @@
 # region imports
 # Standard library imports
 import os
-import shutil
-import json
-import time
-import threading
-import queue
-import uuid
 import setproctitle
-from pathlib import Path
-import argparse
-import logging
-import sys
 import signal
-import importlib.util
-from functools import partial
 
 # Third-party imports
 import gi
@@ -25,19 +13,24 @@ from gi.repository import Gtk
 # Local application-specific imports
 from hailo_apps.python.core.gstreamer.gstreamer_app import GStreamerApp, app_callback_class, dummy_callback
 from hailo_apps.python.core.common.core import get_default_parser, detect_hailo_arch, get_resource_path
-from hailo_apps.python.core.common.buffer_utils import get_numpy_from_buffer_efficient, get_caps_from_pad
-from hailo_apps.python.pipeline_apps.clip import text_image_matcher, gui
-from hailo_apps.python.core.gstreamer.gstreamer_helper_pipelines import QUEUE, SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER, TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE, CROPPER_PIPELINE
+from hailo_apps.python.pipeline_apps.clip.text_image_matcher import text_image_matcher
+from hailo_apps.python.pipeline_apps.clip import gui
+from hailo_apps.python.core.gstreamer.gstreamer_helper_pipelines import (
+    QUEUE, 
+    SOURCE_PIPELINE, 
+    INFERENCE_PIPELINE, 
+    INFERENCE_PIPELINE_WRAPPER, 
+    TRACKER_PIPELINE, 
+    USER_CALLBACK_PIPELINE, 
+    DISPLAY_PIPELINE, 
+    CROPPER_PIPELINE
+)
 from hailo_apps.python.core.common.defines import (
     RESOURCES_SO_DIR_NAME, 
     RESOURCES_MODELS_DIR_NAME, 
     RESOURCES_VIDEOS_DIR_NAME,
     RESOURCES_JSON_DIR_NAME,
-    DEFAULT_LOCAL_RESOURCES_PATH,
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME,
-    HAILO8_ARCH,
-    HAILO10H_ARCH,
-    HAILO8L_ARCH,
     CLIP_APP_TITLE,
     CLIP_VIDEO_NAME,
     CLIP_PIPELINE,
@@ -50,7 +43,7 @@ from hailo_apps.python.core.common.defines import (
 # endregion
 
 class GStreamerClipApp(GStreamerApp):
-    def __init__(self, user_data, app_callback):
+    def __init__(self, app_callback, user_data, parser=None):
         setproctitle.setproctitle(CLIP_APP_TITLE)
         if parser == None:
             parser = get_default_parser()
@@ -60,20 +53,21 @@ class GStreamerClipApp(GStreamerApp):
         parser.add_argument("--disable-runtime-prompts", action="store_true", help="When set, app will not support runtime prompts. Default is False.")
         super().__init__(parser, user_data)
         if self.options_menu.input is None:
-            self.json_file = os.path.join(self.current_path, "example_embeddings.json") if self.options_menu.json_path is None else self.options_menu.json_path
+            self.json_file = os.path.join(self.current_path, 'example_embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
         else:
-            self.json_file = os.path.join(self.current_path, "embeddings.json") if self.options_menu.json_path is None else self.options_menu.json_path
+            self.json_file = os.path.join(self.current_path, 'embeddings.json') if self.options_menu.json_path is None else self.options_menu.json_path
         self.app_callback = app_callback
         self.detector = self.options_menu.detector
         self.text_image_matcher = text_image_matcher
         self.text_image_matcher.set_threshold(self.options_menu.detection_threshold)
-        self.win = AppWindow(self.args, self.user_data, self.app_callback)
-        self.batch_size = 8
+        self.win = gui.AppWindow(self.options_menu.detection_threshold, self.options_menu.disable_runtime_prompts, self.text_image_matcher, self.json_file)
+        self.detection_batch_size = 8
+        self.clip_batch_size = 8
 
         if self.options_menu.arch is None:
             detected_arch = detect_hailo_arch()
             if detected_arch is None:
-                raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
+                raise ValueError('Could not auto-detect Hailo architecture. Please specify --arch manually.')
             self.arch = detected_arch
         else:
             self.arch = self.options_menu.arch
@@ -105,7 +99,7 @@ class GStreamerClipApp(GStreamerApp):
         self.create_pipeline()
 
     def run(self):
-        self.win.connect("destroy", self.on_destroy)
+        self.win.connect('destroy', self.on_destroy)
         self.win.show_all()
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         Gtk.main()
@@ -118,37 +112,35 @@ class GStreamerClipApp(GStreamerApp):
         source_pipeline = SOURCE_PIPELINE(self.video_source, self.video_width, self.video_height, frame_rate=self.frame_rate, sync=self.sync)
 
         detection_pipeline = INFERENCE_PIPELINE(
-                hef_path=hef_path,
-                post_process_so=YOLO5_POSTPROCESS_SO,
-                batch_size=batch_size,
-                config_json=YOLO5_CONFIG_PATH,
-                post_function_name=YOLO5_NETWORK_NAME,
+                hef_path=self.hef_path_detection,
+                post_process_so=self.post_process_so_detection,
+                post_function_name=self.detection_post_process_function_name,
+                batch_size=self.detection_batch_size,
+                config_json=self.detection_config_json_path,
                 scheduler_priority=31,
                 scheduler_timeout_ms=100,
                 name='detection_inference'
-            )
+        )
 
-        if self.options_menu.detector == "none":
-            detection_pipeline_wrapper = ""
-        else:
+        detection_pipeline_wrapper = ''
+        if self.options_menu.detector != 'none':
             detection_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(detection_pipeline)
 
-
         clip_pipeline = INFERENCE_PIPELINE(
-                hef_path=clip_hef_path,
-                post_process_so=clip_postprocess_so,
-                batch_size=batch_size,
-                name='clip_inference',
-                scheduler_timeout_ms=1000,
+                hef_path=self.hef_path_clip,
+                post_process_so=self.post_process_so_clip,
+                batch_size=self.clip_batch_size,
                 scheduler_priority=16,
-            )
+                scheduler_timeout_ms=1000,
+                name='clip_inference'
+        )
     
-        tracker_pipeline = TRACKER_PIPELINE(class_id=class_id, keep_past_metadata=True)
+        tracker_pipeline = TRACKER_PIPELINE(class_id=self.class_id, keep_past_metadata=True)
 
         clip_cropper_pipeline = CROPPER_PIPELINE(
             inner_pipeline=clip_pipeline,
-            so_path=DEFAULT_CROP_SO,
-            function_name=crop_function_name,
+            so_path=self.post_process_so_cropper,
+            function_name=self.cropper_post_process_function_name,
             name='clip_cropper'
         )
 
@@ -158,65 +150,26 @@ class GStreamerClipApp(GStreamerApp):
             clip_t. ! {QUEUE(name="clip_muxer_queue")} ! videoscale n-threads=4 qos=false ! {clip_pipeline} ! clip_hmux.sink_1 \
             clip_hmux. ! {QUEUE(name="clip_hmux_queue")} '
 
-        # TBD aggregator does not support ROI classification
-        # clip_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(clip_pipeline, name='clip')
-
         display_pipeline = DISPLAY_PIPELINE(sync=self.sync, show_fps=self.show_fps)
 
-        # Text to image matcher
-        CLIP_PYTHON_MATCHER = f'hailopython name=pyproc module={hailopython_path} qos=false '
-        CLIP_CPP_MATCHER = f'hailofilter so-path={clip_matcher_so} qos=false config-path={clip_matcher_config} '
+        user_callback_pipeline = USER_CALLBACK_PIPELINE()
 
-        clip_postprocess_pipeline = f' {CLIP_PYTHON_MATCHER} ! \
-            {QUEUE(name="clip_postprocess_queue")} ! \
-            identity name=identity_callback '
-
-        # PIPELINE
-        if self.detector == "none":
-            PIPELINE = f'{source_pipeline} ! \
-            {clip_pipeline_wrapper} ! \
-            {clip_postprocess_pipeline} ! \
-            {display_pipeline}'
+        if self.detector == 'none':
+            return (
+                f'{source_pipeline} ! '
+                f'{clip_pipeline_wrapper} ! '
+                f'{user_callback_pipeline} ! '
+                f'{display_pipeline}'
+            )
         else:
-            PIPELINE = f'{source_pipeline} ! \
-            {detection_pipeline_wrapper} ! \
-            {tracker_pipeline} ! \
-            {clip_cropper_pipeline} ! \
-            {clip_postprocess_pipeline} ! \
-            {display_pipeline}'
-
-class AppWindow(Gtk.Window):
-    # Add GUI functions to the AppWindow class
-    build_ui = gui.build_ui
-    add_text_boxes = gui.add_text_boxes
-    update_text_boxes = gui.update_text_boxes
-    update_text_prefix = gui.update_text_prefix
-    quit_button_clicked = gui.quit_button_clicked
-    on_text_box_updated = gui.on_text_box_updated
-    on_slider_value_changed = gui.on_slider_value_changed
-    on_negative_check_button_toggled = gui.on_negative_check_button_toggled
-    on_ensemble_check_button_toggled = gui.on_ensemble_check_button_toggled
-    on_load_button_clicked = gui.on_load_button_clicked
-    on_save_button_clicked = gui.on_save_button_clicked
-    update_progress_bars = gui.update_progress_bars
-    on_track_id_update = gui.on_track_id_update
-    disable_text_boxes = gui.disable_text_boxes
-
-    def __init__(self):
-        Gtk.Window.__init__(self, title="Clip App")
-        self.set_border_width(10)
-        self.set_default_size(1, 1)
-        self.fullscreen_mode = False
-        self.max_entries = 6
-        self.build_ui(self.options_menu)
-        if self.options_menu.disable_runtime_prompts:
-            self.disable_text_boxes()
-            self.on_load_button_clicked(None)
-        else:
-            self.text_image_matcher.init_clip()
-        if self.text_image_matcher.model_runtime is not None:
-            self.on_load_button_clicked(None)
-        self.update_text_boxes()
+            return (
+                f'{source_pipeline} ! '
+                f'{detection_pipeline_wrapper} ! '
+                f'{tracker_pipeline} ! '
+                f'{clip_cropper_pipeline} ! '
+                f'{user_callback_pipeline} ! '
+                f'{display_pipeline}'
+            )
 
 if __name__ == "__main__":
     user_data = app_callback_class()
