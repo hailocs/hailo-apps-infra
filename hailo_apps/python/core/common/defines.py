@@ -15,7 +15,7 @@ HAILO_TAPPAS_CORE_PYTHON_NAMES = [
     HAILO_TAPPAS_CORE,
 ]
 HAILORT_PACKAGE_NAME = "hailort"
-HAILORT_PACKAGE_NAME_RPI = "h10-hailort"
+HAILORT_PACKAGE_NAME_RPI = "h10-hailort"  # This should be changed
 HAILO_FILE_EXTENSION = ".hef"
 MODEL_ZOO_URL = "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled"
 RESOURCES_ROOT_PATH_DEFAULT = "/usr/local/hailo/resources"  # Do Not Change!
@@ -362,3 +362,14 @@ TTS_NOISE_SCALE = 0.6  # Voice variability (lower is more consistent)
 TTS_W_SCALE = 0.6  # Pronunciation variability (lower is more consistent)
 LLM_PROMPT_PREFIX = "Respond in up to three sentences. "
 TEMP_WAV_DIR = "/tmp"
+
+# OCR pipeline defaults
+OCR_APP_TITLE = "Hailo OCR App"
+OCR_PIPELINE = "ocr"
+OCR_DETECTION_MODEL_NAME = "ocr_det"
+OCR_RECOGNITION_MODEL_NAME = "ocr"
+OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
+OCR_DETECTION_POSTPROCESS_FUNCTION = "paddleocr_det"
+OCR_RECOGNITION_POSTPROCESS_FUNCTION = "paddleocr_recognize"
+OCR_CROPPER_FUNCTION = "crop_text_regions"
+OCR_VIDEO_NAME = "ocr.mp4"
