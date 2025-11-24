@@ -7,7 +7,7 @@
 The tiling pipeline demonstrates splitting each frame into several tiles which are processed independently by the `hailonet` element. This method is especially effective for **detecting small objects in high-resolution frames**.
 
 **To demonstrate tiling capabilities, we've selected a drone/aerial use case as the default:**
-- **Default Model:** `hailo_yolov8n_4_classes_vga` - optimized for aerial object detection
+- **Default Model:** `hailo_yolov8n_4_classes_vga` - Hailo trained model, also trained on VisDrone dataset
 - **Default Video:** `tiling_visdrone_720p.mp4` - aerial footage with small objects
 - **Use Case:** Perfect for demonstrating small object detection in high-resolution frames
 
@@ -34,7 +34,7 @@ To close the application, press `Ctrl+C`.
 hailo-tiling --multi-scale
 ```
 - Uses `hailo_yolov8n_4_classes_vga` + multi-scale
-- Optimized for scenes with a mix of small and large objects
+- Multi scale allows for a mix of small and large objects
 
 **With live camera:**
 ```bash
@@ -106,7 +106,7 @@ Use the `--min-overlap` parameter to ensure sufficient overlap for your objects:
 ### How It Works
 
 1. **Auto Mode:** The application calculates the number of tiles needed to ensure at least `min-overlap` between adjacent tiles
-2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tiles will be enlarged to meet the minimum overlap. And you'll receive a warning
+2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tile sizes will be enlarged to meet the minimum overlap requirement, and you'll receive a notification in the configuration printout.
 
 ### Overlap Recommendations
 
@@ -165,10 +165,9 @@ The application operates in two modes:
 
 **Manual Mode:** Activated when you specify `--tiles-x` or `--tiles-y`
 - You control the tile grid dimensions
-- Tiles sized to model input resolution (or larger if needed for minimum overlap)
-- Tiles always maintain square aspect ratio (width = height)
+- Tiles sized to model input resolution (or enlarged if needed to meet minimum overlap)
 - Overlap automatically calculated to ensure coverage
-- **Note:** If minimum overlap can't be met with model input size, tiles will be enlarged while maintaining square aspect ratio
+- **Note:** If minimum overlap can't be met with model-sized tiles, the application will use larger tiles to satisfy the requirement.
 
 *   `--tiles-x` - Number of tiles horizontally (triggers manual mode)
 *   `--tiles-y` - Number of tiles vertically (triggers manual mode)

@@ -15,7 +15,7 @@ HAILO_TAPPAS_CORE_PYTHON_NAMES = [
     HAILO_TAPPAS_CORE,
 ]
 HAILORT_PACKAGE_NAME = "hailort"
-HAILORT_PACKAGE_NAME_RPI = "h10-hailort"
+HAILORT_PACKAGE_NAME_RPI = "h10-hailort"  # This should be changed
 HAILO_FILE_EXTENSION = ".hef"
 MODEL_ZOO_URL = "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled"
 RESOURCES_ROOT_PATH_DEFAULT = "/usr/local/hailo/resources"  # Do Not Change!
@@ -173,8 +173,6 @@ RESOURCES_SO_DIR_NAME = "so"
 RESOURCES_PHOTOS_DIR_NAME = "photos"
 RESOURCES_JSON_DIR_NAME = "json"
 RESOURCE_PACKAGES_DIR_NAME = "packages"
-RESOURCE_FACE_RECON_TRAIN = "face_recon/train"
-RESOURCE_FACE_RECON_SAMPLES = "face_recon/samples"
 RESOURCES_DIRS_MAP = [
     f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCES_MODELS_DIR_NAME}/{HAILO8_ARCH}",
     f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCES_MODELS_DIR_NAME}/{HAILO8L_ARCH}",
@@ -183,9 +181,7 @@ RESOURCES_DIRS_MAP = [
     f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCES_PHOTOS_DIR_NAME}",
     f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCES_JSON_DIR_NAME}",
     f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCES_VIDEOS_DIR_NAME}",
-    f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCE_FACE_RECON_TRAIN}",
-    f"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCE_FACE_RECON_SAMPLES}",
-    F"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCE_PACKAGES_DIR_NAME}",
+    F"{RESOURCES_ROOT_PATH_DEFAULT}/{RESOURCE_PACKAGES_DIR_NAME}"
 ]
 
 # GStreamer defaults
@@ -244,7 +240,6 @@ FACE_RECOGNITION_POSTPROCESS_SO_FILENAME = "libface_recognition_post.so"
 FACE_ALIGN_POSTPROCESS_SO_FILENAME = "libvms_face_align.so"
 FACE_CROP_POSTPROCESS_SO_FILENAME = "libvms_croppers.so"
 FACE_RECOGNITION_VIDEO_NAME = "face_recognition.mp4"
-FACE_RECON_DIR_NAME = "face_recon"
 FACE_RECON_DATABASE_DIR_NAME = "database"
 FACE_RECON_TRAIN_DIR_NAME = "train"
 FACE_RECON_SAMPLES_DIR_NAME = "samples"
@@ -253,7 +248,28 @@ FACE_DETECTION_JSON_NAME = "scrfd.json"
 VMS_CROPPER_POSTPROCESS_FUNCTION = "face_recognition"
 ARCFACE_MOBILEFACENET_POSTPROCESS_FUNCTION = "filter"
 SCRFD_8_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
+SCRFD_10_POSTPROCESS_FUNCTION = "scrfd_10g_letterbox"
 SCRFD_8L_POSTPROCESS_FUNCTION = "scrfd_2_5g_letterbox"
+
+# Clip pipeline defaults
+CLIP_PIPELINE = "clip"
+CLIP_MODEL_NAME_H8 = "clip_resnet_50x4"
+CLIP_MODEL_NAME_H8L = "clip_resnet_50x4_h8l"
+CLIP_MODEL_NAME_10H = "TBD"
+
+CLIP_DETECTION_PIPELINE = "clip_detection"
+CLIP_DETECTION_MODEL_NAME_H8 = "yolov5s_personface"
+CLIP_DETECTION_MODEL_NAME_H8L = "yolov5s_personface_h8l_pi"
+CLIP_DETECTION_MODEL_NAME_10H = "TBD"
+
+CLIP_APP_TITLE = "Hailo CLIP App"
+CLIP_VIDEO_NAME = "clip_video.mp4"
+
+CLIP_DETECTION_JSON_NAME = "yolov5s_personface.json"
+
+CLIP_DETECTION_POSTPROCESS_SO_FILENAME = 'libyolo_post.so'
+CLIP_POSTPROCESS_SO_FILENAME = 'libclip_post.so'
+CLIP_CROPPER_POSTPROCESS_SO_FILENAME = 'libclip_croppers.so'
 
 # Multisource pipeline defaults
 MULTI_SOURCE_APP_TITLE = "Hailo Multisource App"
@@ -262,8 +278,7 @@ TAPPAS_STREAM_ID_TOOL_SO_FILENAME = 'libstream_id_tool.so'
 
 # REID Multisource pipeline defaults
 REID_MULTISOURCE_APP_TITLE = "Hailo REID Multisource App"
-MULTI_SOURCE_DIR_NAME = "reid_multisource"
-MULTI_SOURCE_DATABASE_DIR_NAME = "database"
+REID_MULTI_SOURCE_DATABASE_DIR_NAME = "database"
 REID_POSTPROCESS_SO_FILENAME = "librepvgg_reid_postprocess.so"
 ALL_DETECTIONS_CROPPER_POSTPROCESS_SO_FILENAME = "liball_detections_cropper_postprocess.so"
 REID_CROPPER_POSTPROCESS_FUNCTION = 'all_detections'
@@ -282,6 +297,10 @@ TILING_VIDEO_EXAMPLE_NAME = "tiling_visdrone_720p.mp4"
 TILING_MODEL_NAME = "hailo_yolov8n_4_classes_vga"
 TILING_POSTPROCESS_SO_FILENAME = "libyolo_hailortpp_postprocess.so"
 TILING_POSTPROCESS_FUNCTION = "filter"
+
+# Models config (labels)
+VISDRONE_CONFIG_JSON_NAME = "visdrone.json"
+HAILO_4_CLASSES_CONFIG_JSON_NAME = "hailo_4_classes.json"
 
 # Installation & subprocess defaults
 PIP_SHOW_TIMEOUT = 5  # seconds
@@ -315,9 +334,6 @@ BASIC_PIPELINES_VIDEO_EXAMPLE_NAME = "example.mp4"
 BASIC_PIPELINES_VIDEO_EXAMPLE_640_NAME = "example_640.mp4"
 BARCODE_VIDEO_EXAMPLE_NAME = "barcode.mp4"
 
-# Photos resources
-HAILO_LOGO_PHOTO_NAME = "logo.png"
-
 # Gstreamer pipeline defaults
 GST_VIDEO_SINK = "autovideosink"
 
@@ -337,3 +353,14 @@ TTS_NOISE_SCALE = 0.6  # Voice variability (lower is more consistent)
 TTS_W_SCALE = 0.6  # Pronunciation variability (lower is more consistent)
 LLM_PROMPT_PREFIX = "Respond in up to three sentences. "
 TEMP_WAV_DIR = "/tmp"
+
+# OCR pipeline defaults
+OCR_APP_TITLE = "Hailo OCR App"
+OCR_PIPELINE = "ocr"
+OCR_DETECTION_MODEL_NAME = "ocr_det"
+OCR_RECOGNITION_MODEL_NAME = "ocr"
+OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
+OCR_DETECTION_POSTPROCESS_FUNCTION = "paddleocr_det"
+OCR_RECOGNITION_POSTPROCESS_FUNCTION = "paddleocr_recognize"
+OCR_CROPPER_FUNCTION = "crop_text_regions"
+OCR_VIDEO_NAME = "ocr.mp4"
