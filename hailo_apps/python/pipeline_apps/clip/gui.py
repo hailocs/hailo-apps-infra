@@ -9,7 +9,6 @@ class AppWindow(Gtk.Window):
         self.disable_runtime_prompts = disable_runtime_prompts
         self.text_image_matcher = text_image_matcher
         self.json_file = json_file
-
         self.set_border_width(10)
         self.set_default_size(1, 1)
         self.fullscreen_mode = False
@@ -150,10 +149,7 @@ class AppWindow(Gtk.Window):
             label.set_text(new_text_prefix)
 
     def quit_button_clicked(self, widget=None):
-        Gtk.main_quit()
-
-    def shutdown(self):
-        Gtk.main_quit()
+        self.close() 
 
     def on_text_box_updated(self, widget, event, idx):
         """Callback function for text box updates."""

@@ -109,13 +109,14 @@ class GStreamerClipApp(GStreamerApp):
         identity_pad.add_probe(Gst.PadProbeType.BUFFER, self.matching_identity_callback, self.user_data)  # trigger - when the pad gets buffer
 
     def run(self):
-        self.win.connect('destroy', self.on_destroy)
+        self.win.connect('delete-event', self.on_window_close)
         self.win.show_all()
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         super().run()
         
-    def on_destroy(self, window):
-        window.quit_button_clicked()
+    def on_window_close(self, window, event):
+        self.loop.quit()
+        return False
 
     def get_pipeline_string(self):
         source_pipeline = SOURCE_PIPELINE(self.video_source, self.video_width, self.video_height, frame_rate=self.frame_rate, sync=self.sync)
