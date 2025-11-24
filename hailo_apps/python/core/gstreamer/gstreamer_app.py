@@ -45,6 +45,8 @@ from hailo_apps.python.core.common.camera_utils import (
 from hailo_apps.python.core.common.core import (
     load_environment,
 )
+from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
+
 
 # Absolute imports for your common utilities
 from hailo_apps.python.core.common.defines import (
@@ -123,6 +125,18 @@ class GStreamerApp:
 
         self.options_menu = args.parse_args()
         hailo_logger.debug(f"Parsed CLI options: {self.options_menu}")
+
+        # Determine the architecture if not specified
+        if self.options_menu.arch is None:
+            detected_arch = detect_hailo_arch()
+            if detected_arch is None:
+                hailo_logger.error("Could not auto-detect Hailo architecture.")
+                raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
+            self.arch = detected_arch
+            hailo_logger.info(f"Auto-detected Hailo architecture: {self.arch}")
+        else:
+            self.arch = self.options_menu.arch
+            hailo_logger.info(f"Using user-specified architecture: {self.arch}")
 
         signal.signal(signal.SIGINT, self.shutdown)
 
@@ -363,7 +377,7 @@ class GStreamerApp:
 
     def update_fps_caps(self, new_fps=30, source_name="source"):
         hailo_logger.debug(
-            f"update_fps_caps() called with new_fps={new_fps}, source_name={source_name}"
+            "update_fps_caps() called with new_fps=%s, source_name=%s", new_fps, source_name
         )
         videorate_name = f"{source_name}_videorate"
         capsfilter_name = f"{source_name}_fps_caps"

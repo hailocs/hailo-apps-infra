@@ -12,6 +12,8 @@ default:
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/barcode_labels.json
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/yolov5m_seg.json
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/yolov5n_seg.json
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/visdrone.json
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/configs/hailo_4_classes.json
 
 hailo10:
   - "https://dev-public.hailo.ai/v5.1.1/blob/Qwen2-VL-2B-Instruct.hef"
@@ -25,6 +27,7 @@ hailo10:
   - arcface_mobilefacenet
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h15/ocr_det.hef
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h15/ocr.hef
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/hailo10h/hailo_yolov8n_4_classes_vga.hef
 
 hailo8:
   - yolov8m
@@ -35,6 +38,7 @@ hailo8:
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/ocr_det.hef
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/ocr.hef
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/ssd_mobilenet_v1_visdrone.hef
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8/hailo_yolov8n_4_classes_vga.hef
 
 hailo8l:
   - yolov8s
@@ -43,6 +47,7 @@ hailo8l:
   - scrfd_2.5g
   - arcface_mobilefacenet
   - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l_rpi/ssd_mobilenet_v1_visdrone.hef
+  - https://hailo-csdata.s3.eu-west-2.amazonaws.com/resources/hefs/h8l/hailo_yolov8n_4_classes_vga.hef
 
 all:
   - yolov8s_pose
