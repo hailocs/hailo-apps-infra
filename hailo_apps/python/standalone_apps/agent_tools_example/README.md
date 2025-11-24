@@ -56,9 +56,6 @@ Get current weather and rain forecasts for any location worldwide using the Open
 
 **Usage:** The tool uses a `future_days` parameter (0=today, 1=tomorrow, etc.) instead of absolute dates, making it easier for the LLM to use.
 
-### Shell Tool (Read-Only)
-Run safe read-only Linux commands within the repository. Only whitelisted commands are allowed (e.g., `ls`, `cat`, `grep`, `head`, `tail`).
-
 ### RGB LED Tool
 Control RGB LED: turn on/off, change color by name, adjust intensity (0-100%).
 
@@ -102,8 +99,7 @@ Edit `config.py` to customize hardware settings
 ```
 Available tools:
   1. math: Perform basic arithmetic operations: addition, subtraction, multiplication, and division.
-  2. shell_readonly: Run whitelisted read-only shell commands (ls, cat, grep, etc.) inside the repository.
-  3. weather: Get current weather and rain forecasts (supports future days) using the Open-Meteo API.
+  2. weather: Get current weather and rain forecasts (supports future days) using the Open-Meteo API.
 
 Select a tool by number (or 'q' to quit): 1
 
@@ -219,6 +215,41 @@ The agent uses token-based context management (clears at 80% capacity) instead o
 - Automatic adaptation to different model capacities
 
 Use `/context` command to view current token usage.
+
+### Context Caching
+
+The agent automatically caches the LLM context after initializing the system prompt with tool definitions. This significantly reduces startup time when using the same tool again.
+
+**How it works:**
+- On first run with a tool, the system prompt (including tool definitions) is initialized and saved to a cache file
+- On subsequent runs with the same tool, the cached context is loaded instantly
+- Cache files are tool-specific, so each tool has its own cached context
+
+**Cache file location:**
+- Cache files are stored in the `agent_tools_example` directory
+- File naming format: `context_{tool_name}.cache`
+- Example: `context_math.cache` for the math tool
+
+**When context is cached:**
+- After first initialization of a tool's system prompt
+- Context is loaded on tool selection
+- Context is reloaded after using the `/clear` command (if cache exists)
+
+**How to force re-initialization:**
+If you modify the system prompt or tool definitions and want to force re-initialization:
+1. Delete the corresponding cache file: `rm context_{tool_name}.cache`
+2. Restart the agent
+
+The cache will be automatically regenerated on the next run.
+
+**Benefits:**
+- Faster startup time (no need to process system prompt on every run)
+- Instant context restoration after `/clear` command
+- Tool-specific caching (each tool maintains its own cache)
+
+**Logging:**
+- Cache operations are logged at INFO level
+- Enable DEBUG logging to see detailed cache file paths and operations
 
 ## Customizing LLM Behavior
 

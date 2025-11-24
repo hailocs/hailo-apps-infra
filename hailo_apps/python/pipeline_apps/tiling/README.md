@@ -1,17 +1,17 @@
 # Tiling Application
 
-![Tiling Example](../../../../doc/images/tiling.png)
+![Tiling Example](../../../../local_resources/tiling.gif)
 
 ## Overview
 
 The tiling pipeline demonstrates splitting each frame into several tiles which are processed independently by the `hailonet` element. This method is especially effective for **detecting small objects in high-resolution frames**.
 
 **To demonstrate tiling capabilities, we've selected a drone/aerial use case as the default:**
-- **Default Model:** VisDrone MobileNetSSD (300×300) - optimized for aerial object detection
+- **Default Model:** `hailo_yolov8n_4_classes_vga` - Hailo trained model, also trained on VisDrone dataset
 - **Default Video:** `tiling_visdrone_720p.mp4` - aerial footage with small objects
 - **Use Case:** Perfect for demonstrating small object detection in high-resolution frames
 
-For general object detection scenarios, use the `--general-detection` flag to switch to YOLO with COCO dataset.
+For scenes with varied object sizes, you can use the `--multi-scale` flag to enable multi-scale tiling.
 
 
 ## Usage Examples
@@ -20,36 +20,28 @@ If you application seems to be slow, try to use less tiles. If you do need to us
 
 ### Basic Examples
 
-**Default (VisDrone aerial detection):**
+**Default (aerial detection):**
 ```bash
 hailo-tiling
 ```
 To close the application, press `Ctrl+C`.
 
-- Uses VisDrone MobileNetSSD (300×300) + VisDrone video
+- Uses `hailo_yolov8n_4_classes_vga` + VisDrone video
 - Perfect for demonstrating small object detection
 
-**General detection mode (common use cases):**
+**With multi-scale for varied object sizes:**
 ```bash
-hailo-tiling --general-detection
+hailo-tiling --input usb --multi-scale
 ```
-- Uses YOLO (640×640) + COCO dataset + multi-scale
-- Uses standard detection video (`example.mp4`)
-- Optimized for general object detection
-
-**With live camera:**
-```bash
-hailo-tiling --input rpi --general-detection
-```
-- Uses YOLO (640×640) + COCO dataset + multi-scale
+- Uses `hailo_yolov8n_4_classes_vga` with a live camera feed and multi-scale.
 
 **Manual tile grid:**
 ```bash
-hailo-tiling --input usb --tiles-x 3 --tiles-y 2 --hef /path/to/hef_file.hef
+hailo-tiling --input rpi --tiles-x 3 --tiles-y 2 --hef /path/to/hef_file.hef
 ```
-- Uses USB camera
+- Uses Raspberry Pi Camera
 - Creates exactly 3×2 = 6 tiles
-- Uses custom HEF file (a stronger yolo for example)
+- Uses custom HEF file (a stronger model for example)
 
 ## How Tiling Works
 
@@ -76,10 +68,10 @@ Multi-scale adds these predefined grids:
 - **scale-level 2**: Adds 1×1 + 2×2 = +5 tiles
 - **scale-level 3**: Adds 1×1 + 2×2 + 3×3 = +14 tiles
 
-**Example:** With auto mode (2×2 custom grid) and `--multi-scale --scale-levels 2`:
-- Custom tiles: 2×2 = 4 tiles
+**Example:** With 4x3 custom grid) and `--multi-scale --scale-levels 2`:
+- Custom tiles: 4×3 = 12 tiles
 - Additional: 1×1 + 2×2 = 5 tiles
-- **Total: 9 tiles per frame**
+- **Total: 17 tiles per frame**
 
 The pipeline performs: Crop → Inference → Post-process → Aggregate → Remove border objects → Perform NMS
 
@@ -107,7 +99,7 @@ Use the `--min-overlap` parameter to ensure sufficient overlap for your objects:
 ### How It Works
 
 1. **Auto Mode:** The application calculates the number of tiles needed to ensure at least `min-overlap` between adjacent tiles
-2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tiles will be enlarged to meet the minimum overlap. And you'll receive a warning
+2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tile sizes will be enlarged to meet the minimum overlap requirement, and you'll receive a notification in the configuration printout.
 
 ### Overlap Recommendations
 
@@ -147,25 +139,13 @@ This approach maintains the full fidelity of your input data, ensuring optimal d
 
 ### Model Options
 
-*   `--hef-path` - Path to custom YOLO HEF model file (auto-selected based on architecture if not specified)
+*   `--hef-path` - Path to a custom HEF model file. If not specified, the default `hailo_yolov8n_4_classes_vga` is used.
 
-**Automatic Detection:**
-The pipeline automatically detects everything from the HEF filename:
-- **MobileNetSSD models** (containing 'mobilenet') → 300×300 input, MobileNetSSD post-processing
-- **All other models** → 640×640 input, YOLO post-processing
-
-**Default Model:**
-- Uses VisDrone MobileNetSSD (300×300) as the default when no HEF is specified
+**Automatic Configuration:**
+The pipeline automatically reads the model's input resolution directly from the HEF file.
 
 **Default Video:**
 - Uses `tiling_visdrone_720p.mp4` as the default when no input is specified
-
-**General Detection Mode:**
-- Use `--general-detection` flag for common use cases
-- Switches to YOLO model (640×640) with COCO dataset
-- Uses standard detection video (`example.mp4`) as default
-- Automatically enables multi-scale for better object detection
-- Optimized for general object detection scenarios
 
 ### Tiling Options
 
@@ -178,10 +158,9 @@ The application operates in two modes:
 
 **Manual Mode:** Activated when you specify `--tiles-x` or `--tiles-y`
 - You control the tile grid dimensions
-- Tiles sized to model input resolution (or larger if needed for minimum overlap)
-- Tiles always maintain square aspect ratio (width = height)
+- Tiles sized to model input resolution (or enlarged if needed to meet minimum overlap)
 - Overlap automatically calculated to ensure coverage
-- **Note:** If minimum overlap can't be met with model input size, tiles will be enlarged while maintaining square aspect ratio
+- **Note:** If minimum overlap can't be met with model-sized tiles, the application will use larger tiles to satisfy the requirement.
 
 *   `--tiles-x` - Number of tiles horizontally (triggers manual mode)
 *   `--tiles-y` - Number of tiles vertically (triggers manual mode)
@@ -204,7 +183,6 @@ The application operates in two modes:
 
 ### Detection Options
 
-*   `--general-detection` - Use YOLO model with multi-scale for general object detection (COCO dataset)
 *   `--iou-threshold` - NMS IOU threshold for filtering overlapping detections (default: 0.3)
 *   `--border-threshold` - Border threshold to remove tile edge detections in multi-scale mode (default: 0.15)
 
@@ -217,26 +195,19 @@ When you run the application, it displays a detailed configuration summary:
 TILING CONFIGURATION
 ======================================================================
 Input Resolution:     1280x720
-Model:                yolov6n.hef (YOLO, 640x640)
+Model:                hailo_yolov8n_4_classes_vga.hef (YOLO, 640x480)
 
 Tiling Mode:          AUTO
-Custom Tile Grid:     2x2 = 4 tiles
-Tile Size:            640x640 pixels
+Custom Tile Grid:     3x2 = 6 tiles
+Tile Size:            640x480 pixels
+Overlap:              X: 50.0% (~320px), Y: 50.0% (~240px)
 
-Multi-Scale:          ENABLED (auto-enabled for general detection)
-  Custom Tiles:       2x2 = 4 tiles
-  Additional Grids:   1x1 = 1 tile
-  Total Tiles:        5
+Multi-Scale:          DISABLED
+  Total Tiles:        6
 
 Detection Parameters:
-  Batch Size:         5
+  Batch Size:         6
   IOU Threshold:      0.3
-  Border Threshold:   0.15
-
-Model:               YOLO (general detection mode) (640x640)
-
-Overlap:              X: 0.0% (~0px), Y: 15.6% (~100px)
-  ⚠️  Warning:         Very small overlap may miss objects on boundaries
 ======================================================================
 ```
 
@@ -249,37 +220,14 @@ This helps you understand:
 
 **Batch Size:**
 - The batch size is automatically set to match the total number of tiles
-- Single-scale with 2×2 grid → batch size = 4
 - Single-scale with 4×3 grid → batch size = 12
-- Multi-scale (2×2 custom) + scale-levels 1 → batch size = 4 + 1 = 5
-- Multi-scale (2×2 custom) + scale-levels 2 → batch size = 4 + 5 = 9
 - Multi-scale (2×2 custom) + scale-levels 3 → batch size = 4 + 14 = 18
 - This ensures optimal processing throughput
-
-**Single-Scale Mode:**
-- Lower to moderate computational cost (depends on tile grid)
-- Customizable tile grid (1-20 tiles per axis)
-- Best for scenes with uniform object sizes or when you need specific tile coverage
-- Examples:
-  - 2×2 grid = 4 tiles per frame
-  - 4×3 grid = 12 tiles per frame
-  - 6×4 grid = 24 tiles per frame
-
-**Multi-Scale Mode:**
-- Adds predefined grids (1×1, 2×2, 3×3) to custom tiles
-- Higher computational cost (processes custom + predefined grids)
-- Best for scenes with varied object sizes
-- Custom tile settings are still used and important
-- Examples (with 2×2 custom grid):
-  - scale-levels 1: 4 + 1 = 5 tiles per frame
-  - scale-levels 2: 4 + 5 = 9 tiles per frame
-  - scale-levels 3: 4 + 14 = 18 tiles per frame
 
 **Tile Count Impact:**
 - More tiles = better small object detection
 - More tiles = higher processing time (scales with batch size)
 - Balance based on your hardware and requirements
-- Batch processing helps optimize throughput
 
 **Experiment:** Try different tile counts and overlap values to find the best balance for your use case. The "auto mode" is a good starting point but probably an overkill for your use case. Note that you might get better results by using less tiles and a stronger model.
 
