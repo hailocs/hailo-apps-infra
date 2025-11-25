@@ -296,23 +296,14 @@ RTSP_APP_TITLE = "Hailo RTSP App"
 TILING_APP_TITLE = "Hailo Tiling App"
 TILING_VIDEO_EXAMPLE_NAME = "tiling_visdrone_720p.mp4"
 
-# YOLO model definitions
-TILING_YOLO_MODEL_NAME_H8 = "yolov6n"
-TILING_YOLO_MODEL_NAME_H8L = "yolov6n"
-TILING_YOLO_POSTPROCESS_SO_FILENAME = "libyolo_hailortpp_postprocess.so"
-TILING_YOLO_POSTPROCESS_FUNCTION = "filter"
-TILING_YOLO_DEFAULT_MODEL_INPUT_SIZE = 640
+# model definitions
+TILING_MODEL_NAME = "hailo_yolov8n_4_classes_vga"
+TILING_POSTPROCESS_SO_FILENAME = "libyolo_hailortpp_postprocess.so"
+TILING_POSTPROCESS_FUNCTION = "filter"
 
-# MobileNetSSD model definitions
-TILING_MOBILENET_MODEL_NAME_H8 = "ssd_mobilenet_v1_visdrone"
-TILING_MOBILENET_MODEL_NAME_H8L = "ssd_mobilenet_v1_visdrone"
-TILING_MOBILENET_POSTPROCESS_SO_FILENAME = "libmobilenet_ssd_postprocess.so"
-TILING_MOBILENET_POSTPROCESS_FUNCTION = "mobilenet_ssd_visdrone"
-TILING_MOBILENET_DEFAULT_MODEL_INPUT_SIZE = 300
-
-# Default model type and size (for backward compatibility)
-TILING_DEFAULT_MODEL_TYPE = "mobilenet"
-TILING_DEFAULT_MODEL_INPUT_SIZE = 300
+# Models config (labels)
+VISDRONE_CONFIG_JSON_NAME = "visdrone.json"
+HAILO_4_CLASSES_CONFIG_JSON_NAME = "hailo_4_classes.json"
 
 # Installation & subprocess defaults
 PIP_SHOW_TIMEOUT = 5  # seconds
@@ -352,6 +343,7 @@ GST_VIDEO_SINK = "autovideosink"
 # Gen AI defaults
 VLM_MODEL_NAME_H10 = "Qwen2-VL-2B-Instruct.hef"
 LLM_MODEL_NAME_H10 = "Qwen2.5-1.5B-Instruct.hef"
+LLM_CODER_MODEL_NAME_H10 = "Qwen2.5-Coder-1.5B-Instruct.hef"
 WHISPER_MODEL_NAME_H10 = "Whisper-Base"
 
 # Whisper defaults
@@ -364,3 +356,14 @@ TTS_NOISE_SCALE = 0.6  # Voice variability (lower is more consistent)
 TTS_W_SCALE = 0.6  # Pronunciation variability (lower is more consistent)
 LLM_PROMPT_PREFIX = "Respond in up to three sentences. "
 TEMP_WAV_DIR = "/tmp"
+
+# OCR pipeline defaults
+OCR_APP_TITLE = "Hailo OCR App"
+OCR_PIPELINE = "ocr"
+OCR_DETECTION_MODEL_NAME = "ocr_det"
+OCR_RECOGNITION_MODEL_NAME = "ocr"
+OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
+OCR_DETECTION_POSTPROCESS_FUNCTION = "paddleocr_det"
+OCR_RECOGNITION_POSTPROCESS_FUNCTION = "paddleocr_recognize"
+OCR_CROPPER_FUNCTION = "crop_text_regions"
+OCR_VIDEO_NAME = "ocr.mp4"
