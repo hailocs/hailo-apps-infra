@@ -38,6 +38,10 @@ SERVO_MIN_ANGLE = -90.0  # Minimum servo angle in degrees
 SERVO_MAX_ANGLE = 90.0  # Maximum servo angle in degrees
 ELEVATOR_SIMULATOR_PORT = 5002  # Port for elevator simulator web server
 
+# Voice Configuration
+ENABLE_VOICE = True
+ENABLE_TTS = True
+
 # Logger Setup
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(
@@ -98,4 +102,3 @@ def get_hef_path() -> str:
             "Set HAILO_HEF_PATH environment variable to a valid .hef path."
         )
     return str(hef_path)
-

@@ -10,7 +10,8 @@ The tools application provides an interactive CLI chat agent (`chat_agent.py`) t
 
 ### Key Components
 
-- **`chat_agent.py`** - Main interactive CLI agent (entry point)
+- **`chat_agent.py`** - Main interactive CLI agent (text-based entry point)
+- **`voice_chat_agent.py`** - Voice-enabled interactive agent (combines voice I/O with tool calling)
 - **`tool_*.py`** - Individual tool modules (discovered automatically)
 - **`reference_example.py`** - Reference implementation demonstrating tool calling patterns
 
@@ -195,7 +196,7 @@ The tool will be automatically discovered when you run `chat_agent.py`. No code 
 
 ## Usage
 
-### Running the Chat Agent
+### Running the Chat Agent (Text-Based)
 
 ```bash
 # Basic usage
@@ -208,7 +209,39 @@ python -m hailo_apps.hailo_app_python.tools.chat_agent
 HAILO_HEF_PATH=/path/to/model.hef python -m hailo_apps.hailo_app_python.tools.chat_agent
 ```
 
-### Interactive Commands
+### Running the Voice Chat Agent
+
+**Prerequisites**: The voice chat agent requires Piper TTS model installation. See [Voice Processing Module Documentation](../../core/gen_ai_utils/voice_processing/README.md) for installation instructions.
+
+```bash
+# Basic usage
+python -m hailo_apps.hailo_app_python.tools.voice_chat_agent
+
+# With debug logging
+python -m hailo_apps.hailo_app_python.tools.voice_chat_agent --debug
+
+# Without TTS (voice input only)
+python -m hailo_apps.hailo_app_python.tools.voice_chat_agent --no-tts
+
+# With custom model
+HAILO_HEF_PATH=/path/to/model.hef python -m hailo_apps.hailo_app_python.tools.voice_chat_agent
+```
+
+**Voice Controls:**
+
+| Key     | Action                     |
+| ------- | -------------------------- |
+| `SPACE` | Start/stop recording       |
+| `Q`     | Quit the application       |
+| `C`     | Clear conversation context |
+
+The voice chat agent:
+- Uses Hailo's Whisper model for speech-to-text
+- Processes queries through the LLM with tool calling
+- Synthesizes responses using Piper TTS
+- Supports all the same tools as the text-based agent
+
+### Interactive Commands (Text Agent)
 
 | Command    | Description                |
 | ---------- | -------------------------- |

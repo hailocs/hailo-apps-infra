@@ -1,12 +1,11 @@
-from processing import AIPipeline
-from recorder import Recorder
+import argparse
+import threading
 from io import StringIO
 from contextlib import redirect_stderr
-import argparse
-import tty
-import termios
-import threading
-import sys
+
+from hailo_apps.python.core.gen_ai_utils.voice_processing.ai_pipeline import AIPipeline
+from hailo_apps.python.core.gen_ai_utils.voice_processing.audio_recorder import AudioRecorder as Recorder
+from hailo_apps.python.core.gen_ai_utils.llm_utils.terminal_ui import TerminalUI
 
 
 class TerminalRecorderApp:
@@ -56,17 +55,6 @@ class TerminalRecorderApp:
         self.is_recording = True
         print("\n🔴 Recording started. Press SPACE to stop.")
 
-    def _show_banner(self):
-        """Displays the full application banner with instructions."""
-        print("\n" + "="*50)
-        print("      Terminal Voice Assistant")
-        print("="*50)
-        print("Controls:")
-        print("  - Press SPACE to start/stop recording.")
-        print("  - Press Q to quit.")
-        print("  - Press C to clear context.")
-        print("="*50 + "\n")
-
     def stop_recording(self):
         """Stops the current recording and initiates AI processing."""
         print("\nProcessing... Please wait.")
@@ -78,7 +66,7 @@ class TerminalRecorderApp:
         else:
             print("No audio recorded.")
 
-        self._show_banner()
+        TerminalUI.show_banner()
 
     def close(self):
         """Stops any active processes and cleans up resources."""
@@ -87,37 +75,8 @@ class TerminalRecorderApp:
             # Stop recording without processing the audio
             self.recorder.stop()
             self.is_recording = False
-        self.ai_pipeline.interrupt()
+        self.ai_pipeline.close()
         self.recorder.close()
-
-def get_char():
-    """
-    Read a single character from stdin.
-
-    - Uses tty.setcbreak() on a real terminal so signals (Ctrl+C) are preserved.
-    - Falls back to a simple read when stdin is not a TTY (e.g. redirected).
-    - Returns '\x03' on KeyboardInterrupt to keep current main() handling.
-    """
-    fd = sys.stdin.fileno()
-
-    # Non-interactive fallback (e.g. run with input redirected)
-    if not sys.stdin.isatty():
-        ch = sys.stdin.read(1)
-        return ch or ""
-
-    old_settings = termios.tcgetattr(fd)
-    try:
-        # cbreak is less invasive than raw: Ctrl+C still raises KeyboardInterrupt
-        tty.setcbreak(fd)
-        try:
-            ch = sys.stdin.read(1)
-        except KeyboardInterrupt:
-            # Keep the current main() logic that expects '\x03' for Ctrl+C
-            return "\x03"
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    return ch
 
 
 def main():
@@ -135,11 +94,11 @@ def main():
 
     # Initialize the app and show welcome message
     app = TerminalRecorderApp(debug=args.debug, no_tts=args.no_tts)
-    app._show_banner()  # Show initial banner
+    TerminalUI.show_banner()  # Show initial banner
 
     # Main loop to capture key presses
     while True:
-        ch = get_char().lower()
+        ch = TerminalUI.get_char().lower()
         if ch == "q":
             app.close()
             print("Exited.")
@@ -151,9 +110,16 @@ def main():
             print("Exited.")
             break
         elif ch == "c":
-            app.ai_pipeline.llm.clear_context()
-            print("Context cleared.")
+            # Access llm via the pipeline structure
+            # Note: AIPipeline in shared module has .llm attribute
+            if hasattr(app.ai_pipeline, 'llm') and hasattr(app.ai_pipeline.llm, 'clear_context'):
+                app.ai_pipeline.llm.clear_context()
+                print("Context cleared.")
+            else:
+                # Fallback if structure is different
+                pass
         # Other characters are ignored
+
 
 if __name__ == "__main__":
     main()
