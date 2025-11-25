@@ -103,13 +103,14 @@ class VoiceAgentApp:
         cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
         context_loaded = context_manager.load_context_from_cache(self.llm, self.selected_tool_name, cache_dir, logger)
 
-        self.need_system_prompt = False
         if not context_loaded:
             logger.info("Initializing system prompt...")
             context_manager.initialize_system_prompt_context(self.llm, system_text, logger)
             context_manager.save_context_to_cache(self.llm, self.selected_tool_name, cache_dir, logger)
+            self.need_system_prompt = False
         else:
             logger.info("Loaded cached context.")
+            self.need_system_prompt = False
 
         self.system_text = system_text
 
@@ -352,8 +353,25 @@ def main():
             break
         elif ch == "c":
             if app.llm:
-                app.llm.clear_context()
-                print("Context cleared.")
+                try:
+                    app.llm.clear_context()
+                    print("Context cleared.")
+
+                    # Try to reload cached context after clearing
+                    from pathlib import Path
+                    cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+                    context_reloaded = context_manager.load_context_from_cache(
+                        app.llm, app.selected_tool_name, cache_dir, logger
+                    )
+                    if context_reloaded:
+                        app.need_system_prompt = False
+                        logger.info("Context reloaded from cache after clear")
+                    else:
+                        app.need_system_prompt = True
+                        logger.info("No cache available after clear, will reinitialize on next message")
+                except Exception as e:
+                    print(f"[Error] Failed to clear context: {e}")
+                    app.need_system_prompt = True
 
 
 if __name__ == "__main__":
