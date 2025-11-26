@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import threading
+import traceback
 from io import StringIO
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -69,27 +70,51 @@ class VoiceAgentApp:
         self.tools_lookup = {self.selected_tool_name: selected_tool}
 
         # Initialize recorder
-        self.recorder = AudioRecorder(debug=debug)
+        try:
+            self.recorder = AudioRecorder(debug=debug)
+        except Exception as e:
+            print(f"[Error] Failed to initialize audio recorder: {e}")
+            raise
+
         self.is_recording = False
         self.lock = threading.Lock()
 
         print("Initializing AI components...")
 
         # Initialize Hailo VDevice and Models
-        params = VDevice.create_params()
-        params.group_id = SHARED_VDEVICE_GROUP_ID
-        self.vdevice = VDevice(params)
+        try:
+            params = VDevice.create_params()
+            params.group_id = SHARED_VDEVICE_GROUP_ID
+            self.vdevice = VDevice(params)
+        except Exception as e:
+            print(f"[Error] Failed to create VDevice: {e}")
+            raise
 
         # LLM
-        self.llm = LLM(self.vdevice, hef_path)
+        try:
+            self.llm = LLM(self.vdevice, hef_path)
+        except Exception as e:
+            print(f"[Error] Failed to initialize LLM: {e}")
+            self.vdevice.release()
+            raise
 
         # S2T
-        self.s2t = SpeechToTextProcessor(self.vdevice)
+        try:
+            self.s2t = SpeechToTextProcessor(self.vdevice)
+        except Exception as e:
+            print(f"[Error] Failed to initialize Speech-to-Text: {e}")
+            self.llm.release()
+            self.vdevice.release()
+            raise
 
         # TTS
         self.tts = None
         if not no_tts:
-            self.tts = TextToSpeechProcessor()
+            try:
+                self.tts = TextToSpeechProcessor()
+            except Exception as e:
+                print(f"[Warning] Failed to initialize TTS: {e}")
+                print("Continuing without TTS support.")
 
         # Initialize Context
         self._init_context()
@@ -101,13 +126,22 @@ class VoiceAgentApp:
         logger.debug("SYSTEM PROMPT:\n%s", system_text)
 
         cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        context_loaded = context_manager.load_context_from_cache(self.llm, self.selected_tool_name, cache_dir, logger)
+        try:
+            context_loaded = context_manager.load_context_from_cache(self.llm, self.selected_tool_name, cache_dir, logger)
+        except Exception as e:
+            logger.warning("Failed to load context cache: %s", e)
+            context_loaded = False
 
         if not context_loaded:
             logger.info("Initializing system prompt...")
-            context_manager.initialize_system_prompt_context(self.llm, system_text, logger)
-            context_manager.save_context_to_cache(self.llm, self.selected_tool_name, cache_dir, logger)
-            self.need_system_prompt = False
+            try:
+                context_manager.initialize_system_prompt_context(self.llm, system_text, logger)
+                context_manager.save_context_to_cache(self.llm, self.selected_tool_name, cache_dir, logger)
+                self.need_system_prompt = False
+            except Exception as e:
+                logger.error("Failed to initialize system context: %s", e)
+                # Fallback: try to send system prompt with first message
+                self.need_system_prompt = True
         else:
             logger.info("Loaded cached context.")
             self.need_system_prompt = False
@@ -123,14 +157,28 @@ class VoiceAgentApp:
 
     def start_recording(self):
         if self.tts:
-            self.tts.interrupt()
-        self.recorder.start()
-        self.is_recording = True
-        print("\n🔴 Recording started. Press SPACE to stop.")
+            try:
+                self.tts.interrupt()
+            except Exception as e:
+                logger.warning("Failed to interrupt TTS: %s", e)
+
+        try:
+            self.recorder.start()
+            self.is_recording = True
+            print("\n🔴 Recording started. Press SPACE to stop.")
+        except Exception as e:
+            print(f"[Error] Failed to start recording: {e}")
+            self.is_recording = False
 
     def stop_recording(self):
         print("\nProcessing... Please wait.")
-        audio = self.recorder.stop()
+        try:
+            audio = self.recorder.stop()
+        except Exception as e:
+            print(f"[Error] Failed to stop recording: {e}")
+            self.is_recording = False
+            return
+
         self.is_recording = False
 
         if audio.size > 0:
@@ -149,7 +197,12 @@ class VoiceAgentApp:
 
     def process_audio(self, audio):
         # 1. Transcribe
-        user_text = self.s2t.transcribe(audio)
+        try:
+            user_text = self.s2t.transcribe(audio)
+        except Exception as e:
+            print(f"[Error] Transcription failed: {e}")
+            return
+
         if not user_text:
             print("No speech detected.")
             return
@@ -161,9 +214,12 @@ class VoiceAgentApp:
 
     def process_interaction(self, user_text):
         # Check context limits
-        context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
-        if context_cleared:
-            self.need_system_prompt = True
+        try:
+            context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
+            if context_cleared:
+                self.need_system_prompt = True
+        except Exception as e:
+            logger.warning("Context check failed: %s", e)
 
         # Prepare prompt
         if self.need_system_prompt:
@@ -190,34 +246,39 @@ class VoiceAgentApp:
         token_filter = streaming.StreamingTextFilter(debug_mode=self.debug)
 
         # Generator loop
-        for token in self.llm.generate(prompt, temperature=config.TEMPERATURE):
-            full_response += token
-            cleaned = token_filter.process_token(token)
+        try:
+            for token in self.llm.generate(prompt, temperature=config.TEMPERATURE):
+                full_response += token
+                cleaned = token_filter.process_token(token)
 
-            if cleaned:
-                print(cleaned, end="", flush=True)
-                if self.tts:
-                    sentence_buffer += cleaned
-                    # Chunk speech
-                    # Simple chunking logic from AI pipeline
-                    delimiters = ['.', '?', '!']
-                    if not first_chunk_sent:
-                        delimiters.append(',')
+                if cleaned:
+                    print(cleaned, end="", flush=True)
+                    if self.tts:
+                        sentence_buffer += cleaned
+                        # Chunk speech
+                        # Simple chunking logic from AI pipeline
+                        delimiters = ['.', '?', '!']
+                        if not first_chunk_sent:
+                            delimiters.append(',')
 
-                    while True:
-                        positions = {sentence_buffer.find(d): d for d in delimiters if sentence_buffer.find(d) != -1}
-                        if not positions:
-                            break
+                        while True:
+                            positions = {sentence_buffer.find(d): d for d in delimiters if sentence_buffer.find(d) != -1}
+                            if not positions:
+                                break
 
-                        first_pos = min(positions.keys())
-                        chunk = sentence_buffer[:first_pos + 1]
+                            first_pos = min(positions.keys())
+                            chunk = sentence_buffer[:first_pos + 1]
 
-                        if chunk.strip():
-                            self.tts.queue_text(chunk.strip(), current_gen_id)
-                            if not first_chunk_sent:
-                                first_chunk_sent = True
+                            if chunk.strip():
+                                self.tts.queue_text(chunk.strip(), current_gen_id)
+                                if not first_chunk_sent:
+                                    first_chunk_sent = True
 
-                        sentence_buffer = sentence_buffer[first_pos + 1:]
+                            sentence_buffer = sentence_buffer[first_pos + 1:]
+        except Exception as e:
+            print(f"\n[Error] LLM generation failed: {e}")
+            logger.error("LLM generation error: %s", traceback.format_exc())
+            return
 
         # Flush remaining speech
         remaining_text = token_filter.get_remaining()
@@ -256,15 +317,20 @@ class VoiceAgentApp:
         tool_result_text = json.dumps(result, ensure_ascii=False)
         tool_response_message = f"<tool_response>{tool_result_text}</tool_response>"
 
-        context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
-        if context_cleared:
-            # Rebuild context if cleared
-            prompt = [
-                message_formatter.messages_system(self.system_text),
-                message_formatter.messages_user(user_text),
-                message_formatter.messages_user(tool_response_message),
-            ]
-        else:
+        try:
+            context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
+            if context_cleared:
+                # Rebuild context if cleared
+                prompt = [
+                    message_formatter.messages_system(self.system_text),
+                    message_formatter.messages_user(user_text),
+                    message_formatter.messages_user(tool_response_message),
+                ]
+            else:
+                prompt = [message_formatter.messages_user(tool_response_message)]
+        except Exception as e:
+            logger.warning("Context check before tool result failed: %s", e)
+            # Assume not cleared if check fails
             prompt = [message_formatter.messages_user(tool_response_message)]
 
         # Update context
@@ -277,15 +343,34 @@ class VoiceAgentApp:
     def close(self):
         print("\nShutting down...")
         if self.is_recording:
-            self.recorder.stop()
+            try:
+                self.recorder.stop()
+            except Exception:
+                pass
+
         if self.tts:
-            self.tts.stop()
+            try:
+                self.tts.stop()
+            except Exception:
+                pass
+
         if hasattr(self, 'recorder'):
-            self.recorder.close()
+            try:
+                self.recorder.close()
+            except Exception:
+                pass
+
         if hasattr(self, 'llm'):
-            self.llm.release()
+            try:
+                self.llm.release()
+            except Exception:
+                pass
+
         if hasattr(self, 'vdevice'):
-            self.vdevice.release()
+            try:
+                self.vdevice.release()
+            except Exception:
+                pass
 
         # Cleanup tool resources
         tool_module = self.selected_tool.get("module")
@@ -316,8 +401,14 @@ def main():
         return
 
     # Tool Selection
-    modules = tool_discovery.discover_tool_modules()
-    all_tools = tool_discovery.collect_tools(modules)
+    try:
+        modules = tool_discovery.discover_tool_modules()
+        all_tools = tool_discovery.collect_tools(modules)
+    except Exception as e:
+        print(f"[Error] Failed to discover tools: {e}")
+        logger.debug(traceback.format_exc())
+        return
+
     if not all_tools:
         print("No tools found.")
         return
@@ -331,7 +422,12 @@ def main():
     tool_execution.initialize_tool_if_needed(selected_tool)
 
     # Start App
-    app = VoiceAgentApp(hef_path, selected_tool, debug=args.debug, no_tts=args.no_tts)
+    try:
+        app = VoiceAgentApp(hef_path, selected_tool, debug=args.debug, no_tts=args.no_tts)
+    except Exception:
+        # Error already printed in __init__
+        return
+
     TerminalUI.show_banner(
         title="Voice-Enabled Tool Agent",
         controls={
@@ -342,38 +438,44 @@ def main():
     )
 
     while True:
-        ch = TerminalUI.get_char().lower()
-        if ch == "q":
-            app.close()
-            break
-        elif ch == " ":
-            app.toggle_recording()
-        elif ch == "\x03":
-            app.close()
-            break
-        elif ch == "c":
-            if app.llm:
-                try:
-                    app.llm.clear_context()
-                    print("Context cleared.")
+        try:
+            ch = TerminalUI.get_char().lower()
+            if ch == "q":
+                app.close()
+                break
+            elif ch == " ":
+                app.toggle_recording()
+            elif ch == "\x03":
+                app.close()
+                break
+            elif ch == "c":
+                if app.llm:
+                    try:
+                        app.llm.clear_context()
+                        print("Context cleared.")
 
-                    # Try to reload cached context after clearing
-                    from pathlib import Path
-                    cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-                    context_reloaded = context_manager.load_context_from_cache(
-                        app.llm, app.selected_tool_name, cache_dir, logger
-                    )
-                    if context_reloaded:
-                        app.need_system_prompt = False
-                        logger.info("Context reloaded from cache after clear")
-                    else:
+                        # Try to reload cached context after clearing
+                        from pathlib import Path
+                        cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+                        context_reloaded = context_manager.load_context_from_cache(
+                            app.llm, app.selected_tool_name, cache_dir, logger
+                        )
+                        if context_reloaded:
+                            app.need_system_prompt = False
+                            logger.info("Context reloaded from cache after clear")
+                        else:
+                            app.need_system_prompt = True
+                            logger.info("No cache available after clear, will reinitialize on next message")
+                    except Exception as e:
+                        print(f"[Error] Failed to clear context: {e}")
                         app.need_system_prompt = True
-                        logger.info("No cache available after clear, will reinitialize on next message")
-                except Exception as e:
-                    print(f"[Error] Failed to clear context: {e}")
-                    app.need_system_prompt = True
+        except KeyboardInterrupt:
+            app.close()
+            break
+        except Exception as e:
+            print(f"[Error] Unexpected error in main loop: {e}")
+            logger.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
     main()
-

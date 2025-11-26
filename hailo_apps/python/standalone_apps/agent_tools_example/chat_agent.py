@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import traceback
 
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM
@@ -74,8 +75,14 @@ def main() -> None:
         return
 
     # Discover and collect tools
-    modules = tool_discovery.discover_tool_modules()
-    all_tools = tool_discovery.collect_tools(modules)
+    try:
+        modules = tool_discovery.discover_tool_modules()
+        all_tools = tool_discovery.collect_tools(modules)
+    except Exception as e:
+        print(f"[Error] Failed to discover tools: {e}")
+        logger.debug(traceback.format_exc())
+        return
+
     if not all_tools:
         print("No tools found. Add 'tool_*.py' modules that define TOOLS_SCHEMA and a run() function.")
         return
@@ -84,8 +91,14 @@ def main() -> None:
     tool_thread, tool_result = tool_selection.start_tool_selection_thread(all_tools)
 
     # Initialize Hailo in main thread (runs in parallel with tool selection)
-    vdevice = VDevice()
-    llm = LLM(vdevice, HEF_PATH)
+    try:
+        vdevice = VDevice()
+        llm = LLM(vdevice, HEF_PATH)
+    except Exception as e:
+        print(f"[Error] Failed to initialize Hailo LLM: {e}")
+        # Wait for thread to avoid orphan threads
+        tool_thread.join()
+        return
 
     # Wait for tool selection to complete
     selected_tool = tool_selection.get_tool_selection_result(tool_thread, tool_result)
@@ -109,7 +122,12 @@ def main() -> None:
         # or could be configured.
         cache_dir = os.path.dirname(os.path.abspath(__file__))
         from pathlib import Path
-        context_loaded = context_manager.load_context_from_cache(llm, selected_tool_name, Path(cache_dir), logger)
+
+        try:
+            context_loaded = context_manager.load_context_from_cache(llm, selected_tool_name, Path(cache_dir), logger)
+        except Exception as e:
+            logger.warning("Failed to load context cache: %s", e)
+            context_loaded = False
 
         if context_loaded:
             # Context was loaded from cache, system prompt already in context
@@ -118,10 +136,16 @@ def main() -> None:
         else:
             # No cache found, initialize system prompt and save context
             logger.info("No cache found, initializing system prompt for tool '%s'", selected_tool_name)
-            context_manager.initialize_system_prompt_context(llm, system_text, logger)
-            context_manager.save_context_to_cache(llm, selected_tool_name, Path(cache_dir), logger)
-            # System prompt is now in context
-            need_system_prompt = False
+            try:
+                context_manager.initialize_system_prompt_context(llm, system_text, logger)
+                context_manager.save_context_to_cache(llm, selected_tool_name, Path(cache_dir), logger)
+                # System prompt is now in context
+                need_system_prompt = False
+            except Exception as e:
+                logger.error("Failed to initialize system context: %s", e)
+                print(f"[Error] Failed to initialize AI context: {e}")
+                # Force system prompt on next message as fallback
+                need_system_prompt = True
 
         # Create a lookup dict for execution (only selected tool)
         tools_lookup = {selected_tool_name: selected_tool}
@@ -130,7 +154,12 @@ def main() -> None:
         print(f"Tool in use: {selected_tool_name}\n")
         while True:
             print("You: ", end="", flush=True)
-            user_text = sys.stdin.readline().strip()
+            try:
+                user_text = sys.stdin.readline().strip()
+            except KeyboardInterrupt:
+                print("\nInterrupted. Type '/exit' to quit properly.")
+                continue
+
             if not user_text:
                 continue
             if user_text.lower() in {"/exit", ":q", "quit", "exit"}:
@@ -154,14 +183,21 @@ def main() -> None:
                     need_system_prompt = True
                 continue
             if user_text.lower() in {"/context"}:
-                context_manager.print_context_usage(llm, show_always=True, logger_instance=logger)
+                try:
+                    context_manager.print_context_usage(llm, show_always=True, logger_instance=logger)
+                except Exception as e:
+                    print(f"[Error] Failed to get context usage: {e}")
                 continue
 
             # Check if we need to trim context based on actual token usage
-            context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
-            if context_cleared:
-                need_system_prompt = True
-                logger.info("Context cleared due to token usage threshold")
+            try:
+                context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
+                if context_cleared:
+                    need_system_prompt = True
+                    logger.info("Context cleared due to token usage threshold")
+            except Exception as e:
+                logger.warning("Context check failed: %s", e)
+                # Continue anyway, worst case we hit token limit
 
             # Log user input
             logger.debug("USER INPUT: %s", user_text)
@@ -180,15 +216,20 @@ def main() -> None:
                 prompt = [message_formatter.messages_user(user_text)]
                 logger.debug("Sending user message to LLM:\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
 
-            # Use generate() for streaming output with on-the-fly filtering
-            is_debug = logger.level == logging.DEBUG
-            raw_response = streaming.generate_and_stream_response(
-                llm=llm,
-                prompt=prompt,
-                prefix="Assistant: ",
-                debug_mode=is_debug,
-            )
-            logger.debug("LLM RAW RESPONSE (before filtering):\n%s", raw_response)
+            try:
+                # Use generate() for streaming output with on-the-fly filtering
+                is_debug = logger.level == logging.DEBUG
+                raw_response = streaming.generate_and_stream_response(
+                    llm=llm,
+                    prompt=prompt,
+                    prefix="Assistant: ",
+                    debug_mode=is_debug,
+                )
+                logger.debug("LLM RAW RESPONSE (before filtering):\n%s", raw_response)
+            except Exception as e:
+                print(f"\n[Error] LLM generation failed: {e}")
+                logger.error("LLM generation error: %s", traceback.format_exc())
+                continue
 
             # Parse tool call from raw response (before cleaning, as tool_call parsing needs the XML tags)
             tool_call = text_processing.parse_function_call(raw_response)
@@ -220,9 +261,13 @@ def main() -> None:
             logger.debug("Adding tool result to LLM context:\n%s", tool_response_message)
 
             # Check if we need to trim context before adding tool result
-            context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
-            if context_cleared:
-                need_system_prompt = True
+            try:
+                context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
+                if context_cleared:
+                    need_system_prompt = True
+            except Exception as e:
+                logger.warning("Context check before tool result failed: %s", e)
+                context_cleared = False
 
             if context_cleared:
                 # Context was cleared, need to rebuild: system, user query, tool result
@@ -245,6 +290,8 @@ def main() -> None:
             except Exception as e:
                 logger.debug("Context update failed (non-critical): %s", e)
 
+    except KeyboardInterrupt:
+        print("\nShutting down...")
     finally:
         # Cleanup resources
         # We need a cleanup function that handles the tool module cleanup
