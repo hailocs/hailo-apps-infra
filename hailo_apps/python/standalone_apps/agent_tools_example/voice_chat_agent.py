@@ -10,14 +10,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import logging
 import os
 import sys
 import threading
 import traceback
-from io import StringIO
-from contextlib import redirect_stderr
 from pathlib import Path
 
 from hailo_platform import VDevice
@@ -27,14 +23,15 @@ from hailo_apps.python.core.gen_ai_utils.voice_processing.audio_recorder import 
 from hailo_apps.python.core.gen_ai_utils.voice_processing.speech_to_text import SpeechToTextProcessor
 from hailo_apps.python.core.gen_ai_utils.voice_processing.text_to_speech import TextToSpeechProcessor
 from hailo_apps.python.core.gen_ai_utils.llm_utils import (
-    context_manager,
     message_formatter,
     streaming,
+    context_manager,
 )
 from hailo_apps.python.core.common.defines import SHARED_VDEVICE_GROUP_ID
 
 try:
     from . import (
+        agent_utils,
         config,
         system_prompt,
         text_processing,
@@ -47,6 +44,7 @@ except ImportError:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
+    import agent_utils
     import config
     import system_prompt
     import text_processing
@@ -65,6 +63,7 @@ class VoiceAgentApp:
         self.no_tts = no_tts
         self.selected_tool = selected_tool
         self.selected_tool_name = selected_tool.get("name", "")
+        self.need_system_prompt = True # Initialize default state
 
         # Initialize tools lookup
         self.tools_lookup = {self.selected_tool_name: selected_tool}
@@ -135,7 +134,8 @@ class VoiceAgentApp:
         if not context_loaded:
             logger.info("Initializing system prompt...")
             try:
-                context_manager.initialize_system_prompt_context(self.llm, system_text, logger)
+                prompt = [message_formatter.messages_system(system_text)]
+                context_manager.add_to_context(self.llm, prompt, logger)
                 context_manager.save_context_to_cache(self.llm, self.selected_tool_name, cache_dir, logger)
                 self.need_system_prompt = False
             except Exception as e:
@@ -214,6 +214,7 @@ class VoiceAgentApp:
 
     def process_interaction(self, user_text):
         # Check context limits
+        # Reason: Proactive trimming to avoid hitting token limits during response generation
         try:
             context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
             if context_cleared:
@@ -223,6 +224,7 @@ class VoiceAgentApp:
 
         # Prepare prompt
         if self.need_system_prompt:
+            # Reason: Re-insert system prompt if context was cleared to maintain tool instructions
             prompt = [
                 message_formatter.messages_system(self.system_text),
                 message_formatter.messages_user(user_text),
@@ -240,9 +242,11 @@ class VoiceAgentApp:
 
         current_gen_id = None
         if self.tts:
+            # Reason: Clear any pending speech to respond to new input immediately
             self.tts.clear_interruption()
             current_gen_id = self.tts.get_current_gen_id()
 
+        # Reason: Filter output to hide XML tags from user while accumulating them for parsing
         token_filter = streaming.StreamingTextFilter(debug_mode=self.debug)
 
         # Generator loop
@@ -314,31 +318,21 @@ class VoiceAgentApp:
                 self.tts.queue_text("There was an error executing the tool.")
 
         # Add result to context
-        tool_result_text = json.dumps(result, ensure_ascii=False)
-        tool_response_message = f"<tool_response>{tool_result_text}</tool_response>"
+        context_cleared = agent_utils.update_context_with_tool_result(
+            self.llm, result, self.system_text, user_text, logger
+        )
 
-        try:
-            context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
-            if context_cleared:
-                # Rebuild context if cleared
-                prompt = [
-                    message_formatter.messages_system(self.system_text),
-                    message_formatter.messages_user(user_text),
-                    message_formatter.messages_user(tool_response_message),
-                ]
-            else:
-                prompt = [message_formatter.messages_user(tool_response_message)]
-        except Exception as e:
-            logger.warning("Context check before tool result failed: %s", e)
-            # Assume not cleared if check fails
-            prompt = [message_formatter.messages_user(tool_response_message)]
-
-        # Update context
-        try:
-            for _ in self.llm.generate(prompt, max_generated_tokens=1):
-                break
-        except Exception as e:
-            logger.debug(f"Context update failed: {e}")
+        # update_context_with_tool_result already handles rebuilding context if needed,
+        # but we might want to track need_system_prompt state if something fails?
+        # The shared util does not modify 'self.need_system_prompt'.
+        # If context was cleared and rebuilt inside util, we don't need to do anything.
+        # If context was NOT cleared, we don't need to do anything.
+        # So we just need to ensure 'self.need_system_prompt' is consistent?
+        # Actually, the util handles the LLM context update.
+        # If it returns True (context cleared), it means it rebuilt it with system prompt.
+        # So we can assume system prompt is in context now.
+        if context_cleared:
+            self.need_system_prompt = False
 
     def close(self):
         print("\nShutting down...")
@@ -360,29 +354,25 @@ class VoiceAgentApp:
             except Exception:
                 pass
 
-        if hasattr(self, 'llm'):
-            try:
-                self.llm.release()
-            except Exception:
-                pass
-
-        if hasattr(self, 'vdevice'):
-            try:
-                self.vdevice.release()
-            except Exception:
-                pass
-
-        # Cleanup tool resources
+        # Cleanup shared resources (LLM, VDevice, Tool)
         tool_module = self.selected_tool.get("module")
-        if tool_module and hasattr(tool_module, "cleanup_tool"):
-            try:
-                tool_module.cleanup_tool()
-            except Exception:
-                pass
+        agent_utils.cleanup_resources(
+            getattr(self, 'llm', None),
+            getattr(self, 'vdevice', None),
+            tool_module,
+            logger
+        )
 
 
 def main():
     config.setup_logging()
+
+    # Validate configuration
+    try:
+        config.validate_config()
+    except ValueError as e:
+        print(f"[Configuration Error] {e}")
+        return
 
     parser = argparse.ArgumentParser(description='Voice-enabled AI Tool Agent')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
@@ -455,7 +445,6 @@ def main():
                         print("Context cleared.")
 
                         # Try to reload cached context after clearing
-                        from pathlib import Path
                         cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
                         context_reloaded = context_manager.load_context_from_cache(
                             app.llm, app.selected_tool_name, cache_dir, logger

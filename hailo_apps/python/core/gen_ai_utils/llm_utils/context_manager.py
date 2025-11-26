@@ -2,15 +2,15 @@
 Context management utilities for LLM interactions.
 
 Handles checking context usage, trimming context, and caching context state.
+Provides robust file operations with atomic writes.
 """
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Optional
 
 from hailo_platform.genai import LLM
-
-from hailo_apps.python.core.gen_ai_utils.llm_utils.message_formatter import messages_system
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def check_and_trim_context(
         if current_usage < threshold:
             return False
 
-        log.info(
+        log.debug(
             f"Context at {current_usage}/{max_capacity} tokens ({current_usage*100//max_capacity}%); clearing..."
         )
         llm.clear_context()
@@ -104,10 +104,15 @@ def get_context_cache_path(tool_name: str, cache_dir: Path) -> Path:
 
 
 def save_context_to_cache(
-    llm: LLM, tool_name: str, cache_dir: Path, logger_instance: Optional[logging.Logger] = None
+    llm: LLM,
+    tool_name: str,
+    cache_dir: Path,
+    logger_instance: Optional[logging.Logger] = None
 ) -> bool:
     """
     Save LLM context to a cache file for faster future loading.
+
+    Uses atomic writes (write to temp then rename) to prevent corruption.
 
     Args:
         llm (LLM): The LLM instance with context to save.
@@ -119,6 +124,7 @@ def save_context_to_cache(
         bool: True if context was saved successfully, False otherwise.
     """
     log = logger_instance or logger
+
     try:
         if not cache_dir.exists():
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -127,16 +133,34 @@ def save_context_to_cache(
         log.debug(f"Saving context to cache file: {cache_path}")
 
         # Get context data from LLM
-        context_data = llm.save_context()
+        try:
+            context_data = llm.save_context()
+        except Exception as e:
+             log.warning(f"LLM save_context failed: {e}")
+             return False
 
-        # Save context data to file (binary format)
-        with open(cache_path, 'wb') as f:
+        if not context_data:
+            log.warning("LLM returned empty context data, skipping save")
+            return False
+
+        # Atomic write: write to .tmp then rename
+        temp_path = cache_path.with_suffix(".tmp")
+        with open(temp_path, 'wb') as f:
             f.write(context_data)
+
+        # Rename is atomic on POSIX
+        shutil.move(str(temp_path), str(cache_path))
 
         log.info(f"Context cache saved successfully for tool '{tool_name}'")
         return True
     except Exception as e:
         log.warning(f"Failed to save context cache for tool '{tool_name}': {e}")
+        # Clean up temp file
+        try:
+            if 'temp_path' in locals() and temp_path.exists():
+                temp_path.unlink()
+        except Exception:
+            pass
         return False
 
 
@@ -144,7 +168,7 @@ def load_context_from_cache(
     llm: LLM, tool_name: str, cache_dir: Path, logger_instance: Optional[logging.Logger] = None
 ) -> bool:
     """
-    Load LLM context from a cache file if it exists.
+    Load LLM context from a cache file with validation.
 
     Args:
         llm (LLM): The LLM instance to load context into.
@@ -163,14 +187,28 @@ def load_context_from_cache(
             log.info(f"No context cache found for tool '{tool_name}' at {cache_path}")
             return False
 
+        if cache_path.stat().st_size == 0:
+            log.warning(f"Context cache file for '{tool_name}' is empty, skipping load")
+            return False
+
         log.debug(f"Loading context from cache file: {cache_path}")
 
-        # Read context data from file (binary format)
-        with open(cache_path, 'rb') as f:
-            context_data = f.read()
+        try:
+            with open(cache_path, 'rb') as f:
+                context_data = f.read()
+        except Exception as e:
+            log.warning(f"Failed to read cache file: {e}")
+            return False
 
-        # Load context data into LLM
-        llm.load_context(context_data)
+        if not context_data:
+            return False
+
+        try:
+            llm.load_context(context_data)
+        except Exception as e:
+            log.warning(f"LLM failed to load context data: {e}")
+            log.warning(f"Cache file might be corrupted: {cache_path}")
+            return False
 
         log.info(f"Context cache loaded successfully for tool '{tool_name}'")
         return True
@@ -179,43 +217,62 @@ def load_context_from_cache(
         return False
 
 
-def initialize_system_prompt_context(
-    llm: LLM, system_text: str, logger_instance: Optional[logging.Logger] = None
-) -> None:
+def add_to_context(
+    llm: LLM, prompt: list, logger_instance: Optional[logging.Logger] = None
+) -> bool:
     """
-    Initialize LLM context with system prompt by generating a minimal response.
+    Add content to the LLM context by generating a minimal response.
 
-    This adds the system prompt to the LLM's context by sending it and generating
-    a single token. We instruct the model to respond with only the end token to
-    avoid adding unnecessary content to the context.
+    This is a placeholder mechanism until official API support is available.
+    It works by sending the prompt and generating a single token (which is discarded).
+    It automatically appends an instruction to the prompt to minimize output.
 
     Args:
-        llm (LLM): The LLM instance to initialize.
-        system_text (str): The system prompt text to add to context.
+        llm (LLM): The LLM instance.
+        prompt (list): The prompt messages to add to context.
         logger_instance (logging.Logger): Logger to use.
+
+    Returns:
+        bool: True if successful, False otherwise.
     """
     log = logger_instance or logger
     try:
-        log.info("Initializing system prompt in context...")
+        # Deep copy prompt to avoid modifying the original list
+        import copy
+        prompt_to_send = copy.deepcopy(prompt)
 
-        # Build prompt with system message and a request for minimal response
-        prompt = [
-            messages_system(system_text + " Respond with only a single space character."),
-        ]
+        # Add instruction to minimize response
+        silence_instruction = " Respond with only a single space character."
 
-        # Generate a single token to add the system prompt to context
-        # We discard the output since we only need it in context
+        if prompt_to_send and isinstance(prompt_to_send, list):
+            last_msg = prompt_to_send[-1]
+            if "content" in last_msg:
+                content = last_msg["content"]
+                if isinstance(content, list):
+                    # Handle content list (e.g. [{"type": "text", "text": ...}])
+                    text_found = False
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            part["text"] = part.get("text", "") + silence_instruction
+                            text_found = True
+                            break
+                    if not text_found:
+                        # If no text part found, append one
+                        content.append({"type": "text", "text": silence_instruction})
+                elif isinstance(content, str):
+                    last_msg["content"] += silence_instruction
+
+        # Generate a single token to add the prompt to context
         generated_tokens = []
-        for token in llm.generate(prompt=prompt, max_generated_tokens=1):
+        for token in llm.generate(prompt=prompt_to_send, max_generated_tokens=1):
             generated_tokens.append(token)
 
-        # Log what was generated for debugging
+        # Log debug info
         generated_text = "".join(generated_tokens)
-        log.debug(f"System prompt initialization generated token: {repr(generated_text)}")
-        log.info("System prompt successfully added to context")
+        log.debug("Context addition generated token: %s", repr(generated_text))
+        return True
 
     except Exception as e:
-        log.warning(f"Failed to initialize system prompt context: {e}")
-        # Don't raise - allow the application to continue
-        # The system prompt will be added normally on first user message
+        log.warning("Failed to add to context: %s", e)
+        return False
 

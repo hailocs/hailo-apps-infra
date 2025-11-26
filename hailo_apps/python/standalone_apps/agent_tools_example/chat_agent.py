@@ -21,18 +21,20 @@ import logging
 import os
 import sys
 import traceback
+from pathlib import Path
 
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM
 
 from hailo_apps.python.core.gen_ai_utils.llm_utils import (
-    context_manager,
     message_formatter,
     streaming,
+    context_manager,
 )
 
 try:
     from . import (
+        agent_utils,
         config,
         system_prompt,
         text_processing,
@@ -45,6 +47,7 @@ except ImportError:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
+    import agent_utils
     import config
     import system_prompt
     import text_processing
@@ -58,6 +61,13 @@ logger = config.LOGGER
 def main() -> None:
     # Set up logging level from environment variable
     config.setup_logging()
+
+    # Validate configuration
+    try:
+        config.validate_config()
+    except ValueError as e:
+        print(f"[Configuration Error] {e}")
+        return
 
     # Get HEF path from config
     try:
@@ -120,11 +130,10 @@ def main() -> None:
         # If cache exists, we don't need to send system prompt on first message
         # NOTE: We assume cache dir is in the same directory as this script for now,
         # or could be configured.
-        cache_dir = os.path.dirname(os.path.abspath(__file__))
-        from pathlib import Path
+        cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
 
         try:
-            context_loaded = context_manager.load_context_from_cache(llm, selected_tool_name, Path(cache_dir), logger)
+            context_loaded = context_manager.load_context_from_cache(llm, selected_tool_name, cache_dir, logger)
         except Exception as e:
             logger.warning("Failed to load context cache: %s", e)
             context_loaded = False
@@ -137,8 +146,9 @@ def main() -> None:
             # No cache found, initialize system prompt and save context
             logger.info("No cache found, initializing system prompt for tool '%s'", selected_tool_name)
             try:
-                context_manager.initialize_system_prompt_context(llm, system_text, logger)
-                context_manager.save_context_to_cache(llm, selected_tool_name, Path(cache_dir), logger)
+                prompt = [message_formatter.messages_system(system_text)]
+                context_manager.add_to_context(llm, prompt, logger)
+                context_manager.save_context_to_cache(llm, selected_tool_name, cache_dir, logger)
                 # System prompt is now in context
                 need_system_prompt = False
             except Exception as e:
@@ -171,7 +181,7 @@ def main() -> None:
                     print("[Info] Context cleared.")
 
                     # Try to reload cached context after clearing
-                    context_reloaded = context_manager.load_context_from_cache(llm, selected_tool_name, Path(cache_dir), logger)
+                    context_reloaded = context_manager.load_context_from_cache(llm, selected_tool_name, cache_dir, logger)
                     if context_reloaded:
                         need_system_prompt = False
                         logger.info("Context reloaded from cache after clear")
@@ -190,6 +200,7 @@ def main() -> None:
                 continue
 
             # Check if we need to trim context based on actual token usage
+            # Reason: Proactive trimming prevents "context window full" errors during generation
             try:
                 context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
                 if context_cleared:
@@ -197,6 +208,8 @@ def main() -> None:
                     logger.info("Context cleared due to token usage threshold")
             except Exception as e:
                 logger.warning("Context check failed: %s", e)
+                # Reason: Failure to check context usage shouldn't stop the conversation;
+                # we might hit the token limit later but we should try to proceed.
                 # Continue anyway, worst case we hit token limit
 
             # Log user input
@@ -255,67 +268,16 @@ def main() -> None:
 
             # Add tool result to LLM context for conversation continuity
             # We need to use context_manager functions here
-
-            tool_result_text = json.dumps(result, ensure_ascii=False)
-            tool_response_message = f"<tool_response>{tool_result_text}</tool_response>"
-            logger.debug("Adding tool result to LLM context:\n%s", tool_response_message)
-
-            # Check if we need to trim context before adding tool result
-            try:
-                context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
-                if context_cleared:
-                    need_system_prompt = True
-            except Exception as e:
-                logger.warning("Context check before tool result failed: %s", e)
-                context_cleared = False
-
+            context_cleared = agent_utils.update_context_with_tool_result(
+                llm, result, system_text, user_text, logger
+            )
             if context_cleared:
-                # Context was cleared, need to rebuild: system, user query, tool result
-                prompt = [
-                    message_formatter.messages_system(system_text),
-                    message_formatter.messages_user(user_text),
-                    message_formatter.messages_user(tool_response_message),
-                ]
                 need_system_prompt = False
-            else:
-                # LLM has context, just add the tool result
-                prompt = [message_formatter.messages_user(tool_response_message)]
-
-            # Add to context by making a minimal generation (just to update context)
-            logger.debug("Updating LLM context with tool result")
-            try:
-                # Generate a single token to update context, then discard the output
-                for _ in llm.generate(prompt=prompt, max_generated_tokens=1):
-                    break
-            except Exception as e:
-                logger.debug("Context update failed (non-critical): %s", e)
 
     except KeyboardInterrupt:
         print("\nShutting down...")
     finally:
-        # Cleanup resources
-        # We need a cleanup function that handles the tool module cleanup
-        if tool_module and hasattr(tool_module, "cleanup_tool"):
-            try:
-                tool_module.cleanup_tool()
-            except Exception as e:
-                logger.debug("Tool cleanup failed: %s", e)
-
-        if llm:
-            try:
-                llm.clear_context()
-            except Exception as e:
-                logger.debug("Error clearing LLM context: %s", e)
-            try:
-                llm.release()
-            except Exception as e:
-                logger.debug("Error releasing LLM: %s", e)
-
-        if vdevice:
-            try:
-                vdevice.release()
-            except Exception as e:
-                logger.debug("Error releasing VDevice: %s", e)
+        agent_utils.cleanup_resources(llm, vdevice, tool_module, logger)
 
 
 if __name__ == "__main__":
