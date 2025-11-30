@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import threading
@@ -23,36 +24,28 @@ from hailo_apps.python.core.gen_ai_utils.voice_processing.audio_recorder import 
 from hailo_apps.python.core.gen_ai_utils.voice_processing.speech_to_text import SpeechToTextProcessor
 from hailo_apps.python.core.gen_ai_utils.voice_processing.text_to_speech import TextToSpeechProcessor
 from hailo_apps.python.core.gen_ai_utils.llm_utils import (
+    agent_utils,
+    context_manager,
     message_formatter,
     streaming,
-    context_manager,
+    tool_discovery,
+    tool_execution,
+    tool_parsing,
+    tool_selection,
 )
+from hailo_apps.python.core.gen_ai_utils.llm_utils.terminal_ui import TerminalUI
 from hailo_apps.python.core.common.defines import SHARED_VDEVICE_GROUP_ID
 
 try:
-    from . import (
-        agent_utils,
-        config,
-        system_prompt,
-        text_processing,
-        tool_discovery,
-        tool_execution,
-        tool_selection,
-    )
+    from . import config, system_prompt
 except ImportError:
     # Add the script's directory to sys.path
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    import agent_utils
     import config
     import system_prompt
-    import text_processing
-    import tool_discovery
-    import tool_execution
-    import tool_selection
 
-from hailo_apps.python.core.gen_ai_utils.llm_utils.terminal_ui import TerminalUI
 
 logger = config.LOGGER
 
@@ -213,25 +206,22 @@ class VoiceAgentApp:
         self.process_interaction(user_text)
 
     def process_interaction(self, user_text):
-        # Check context limits
-        # Reason: Proactive trimming to avoid hitting token limits during response generation
-        try:
-            context_cleared = context_manager.check_and_trim_context(self.llm, logger_instance=logger)
-            if context_cleared:
-                self.need_system_prompt = True
-        except Exception as e:
-            logger.warning("Context check failed: %s", e)
+        # Check if we need to trim context based on actual token usage
+        if context_manager.is_context_full(self.llm, context_threshold=config.CONTEXT_THRESHOLD, logger_instance=logger):
+            logger.info("Context limit reached. Clearing context and reloading from cache...")
+            self.llm.clear_context()
+            cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
 
-        # Prepare prompt
-        if self.need_system_prompt:
-            # Reason: Re-insert system prompt if context was cleared to maintain tool instructions
-            prompt = [
-                message_formatter.messages_system(self.system_text),
-                message_formatter.messages_user(user_text),
-            ]
-            self.need_system_prompt = False
-        else:
-            prompt = [message_formatter.messages_user(user_text)]
+            if context_manager.load_context_from_cache(self.llm, self.selected_tool_name, cache_dir, logger):
+                self.need_system_prompt = False
+                logger.info("Context restored from cache")
+            else:
+                self.need_system_prompt = True
+                logger.warning("Context cleared but failed to restore from cache")
+
+        prompt = [message_formatter.messages_user(user_text)]
+        logger.debug("Sending user message to LLM:\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
+
 
         # Generate response
         print("Assistant: ", end="", flush=True)
@@ -297,11 +287,11 @@ class VoiceAgentApp:
         print()
 
         # Check for tool calls
-        tool_call = text_processing.parse_function_call(full_response)
+        tool_call = tool_parsing.parse_function_call(full_response)
         if tool_call:
-            self.handle_tool_call(tool_call, user_text)
+            self.handle_tool_call(tool_call)
 
-    def handle_tool_call(self, tool_call, user_text):
+    def handle_tool_call(self, tool_call):
         # Execute tool
         result = tool_execution.execute_tool_call(tool_call, self.tools_lookup)
         tool_execution.print_tool_result(result)
@@ -317,22 +307,7 @@ class VoiceAgentApp:
             else:
                 self.tts.queue_text("There was an error executing the tool.")
 
-        # Add result to context
-        context_cleared = agent_utils.update_context_with_tool_result(
-            self.llm, result, self.system_text, user_text, logger
-        )
-
-        # update_context_with_tool_result already handles rebuilding context if needed,
-        # but we might want to track need_system_prompt state if something fails?
-        # The shared util does not modify 'self.need_system_prompt'.
-        # If context was cleared and rebuilt inside util, we don't need to do anything.
-        # If context was NOT cleared, we don't need to do anything.
-        # So we just need to ensure 'self.need_system_prompt' is consistent?
-        # Actually, the util handles the LLM context update.
-        # If it returns True (context cleared), it means it rebuilt it with system prompt.
-        # So we can assume system prompt is in context now.
-        if context_cleared:
-            self.need_system_prompt = False
+        agent_utils.update_context_with_tool_result(self.llm, result, logger)
 
     def close(self):
         print("\nShutting down...")
@@ -392,7 +367,7 @@ def main():
 
     # Tool Selection
     try:
-        modules = tool_discovery.discover_tool_modules()
+        modules = tool_discovery.discover_tool_modules(tool_dir=Path(__file__).parent)
         all_tools = tool_discovery.collect_tools(modules)
     except Exception as e:
         print(f"[Error] Failed to discover tools: {e}")

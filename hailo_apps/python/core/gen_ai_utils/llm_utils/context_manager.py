@@ -16,11 +16,13 @@ from hailo_platform.genai import LLM
 logger = logging.getLogger(__name__)
 
 
-def check_and_trim_context(
-    llm: LLM, context_threshold: float = 0.80, logger_instance: Optional[logging.Logger] = None
+def is_context_full(
+    llm: LLM,
+    context_threshold: float = 0.95,
+    logger_instance: Optional[logging.Logger] = None
 ) -> bool:
     """
-    Check if context needs trimming and clear/reset if needed.
+    Check if context usage exceeds the threshold.
 
     Uses actual token usage from the LLM API to determine when to clear context.
 
@@ -30,28 +32,28 @@ def check_and_trim_context(
         logger_instance (logging.Logger): Logger to use. Defaults to module logger.
 
     Returns:
-        bool: True if context was cleared, False otherwise.
+        bool: True if context usage exceeds threshold, False otherwise.
     """
     log = logger_instance or logger
     try:
+        if log.isEnabledFor(logging.DEBUG):
+            print_context_usage(llm, logger_instance=log)
         max_capacity = llm.max_context_capacity()
         current_usage = llm.get_context_usage_size()
 
-        # Clear when we reach threshold to leave room for next response
+        # Check if we reach threshold
         threshold = int(max_capacity * context_threshold)
 
         if current_usage < threshold:
             return False
 
         log.debug(
-            f"Context at {current_usage}/{max_capacity} tokens ({current_usage*100//max_capacity}%); clearing..."
+            f"Context at {current_usage}/{max_capacity} tokens ({current_usage*100//max_capacity}%); threshold reached."
         )
-        llm.clear_context()
-        log.info("Context cleared successfully.")
         return True
 
     except Exception as e:
-        log.warning(f"Failed to check/clear context: {e}")
+        log.warning(f"Failed to check context usage: {e}")
         return False
 
 
@@ -136,8 +138,8 @@ def save_context_to_cache(
         try:
             context_data = llm.save_context()
         except Exception as e:
-             log.warning(f"LLM save_context failed: {e}")
-             return False
+            log.warning(f"LLM save_context failed: {e}")
+            return False
 
         if not context_data:
             log.warning("LLM returned empty context data, skipping save")
@@ -169,6 +171,7 @@ def load_context_from_cache(
 ) -> bool:
     """
     Load LLM context from a cache file with validation.
+    No need to clear context before loading from cache.
 
     Args:
         llm (LLM): The LLM instance to load context into.
@@ -224,8 +227,8 @@ def add_to_context(
     Add content to the LLM context by generating a minimal response.
 
     This is a placeholder mechanism until official API support is available.
-    It works by sending the prompt and generating a single token (which is discarded).
-    It automatically appends an instruction to the prompt to minimize output.
+    It works by sending the prompt and generating a single token.
+    The API will automatically append an recovery sequence token to the context.
 
     Args:
         llm (LLM): The LLM instance.
@@ -237,34 +240,9 @@ def add_to_context(
     """
     log = logger_instance or logger
     try:
-        # Deep copy prompt to avoid modifying the original list
-        import copy
-        prompt_to_send = copy.deepcopy(prompt)
-
-        # Add instruction to minimize response
-        silence_instruction = " Respond with only a single space character."
-
-        if prompt_to_send and isinstance(prompt_to_send, list):
-            last_msg = prompt_to_send[-1]
-            if "content" in last_msg:
-                content = last_msg["content"]
-                if isinstance(content, list):
-                    # Handle content list (e.g. [{"type": "text", "text": ...}])
-                    text_found = False
-                    for part in content:
-                        if isinstance(part, dict) and part.get("type") == "text":
-                            part["text"] = part.get("text", "") + silence_instruction
-                            text_found = True
-                            break
-                    if not text_found:
-                        # If no text part found, append one
-                        content.append({"type": "text", "text": silence_instruction})
-                elif isinstance(content, str):
-                    last_msg["content"] += silence_instruction
-
         # Generate a single token to add the prompt to context
         generated_tokens = []
-        for token in llm.generate(prompt=prompt_to_send, max_generated_tokens=1):
+        for token in llm.generate(prompt=prompt, max_generated_tokens=1):
             generated_tokens.append(token)
 
         # Log debug info

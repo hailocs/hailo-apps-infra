@@ -27,33 +27,25 @@ from hailo_platform import VDevice
 from hailo_platform.genai import LLM
 
 from hailo_apps.python.core.gen_ai_utils.llm_utils import (
+    agent_utils,
+    context_manager,
     message_formatter,
     streaming,
-    context_manager,
+    tool_discovery,
+    tool_execution,
+    tool_parsing,
+    tool_selection,
 )
 
 try:
-    from . import (
-        agent_utils,
-        config,
-        system_prompt,
-        text_processing,
-        tool_discovery,
-        tool_execution,
-        tool_selection,
-    )
+    from . import config, system_prompt
 except ImportError:
     # Add the script's directory to sys.path so we can import from the same directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    import agent_utils
     import config
     import system_prompt
-    import text_processing
-    import tool_discovery
-    import tool_execution
-    import tool_selection
 
 logger = config.LOGGER
 
@@ -86,7 +78,8 @@ def main() -> None:
 
     # Discover and collect tools
     try:
-        modules = tool_discovery.discover_tool_modules()
+        # Pass the directory of this script to find tools in the same folder
+        modules = tool_discovery.discover_tool_modules(tool_dir=Path(__file__).parent)
         all_tools = tool_discovery.collect_tools(modules)
     except Exception as e:
         print(f"[Error] Failed to discover tools: {e}")
@@ -200,34 +193,11 @@ def main() -> None:
                 continue
 
             # Check if we need to trim context based on actual token usage
-            # Reason: Proactive trimming prevents "context window full" errors during generation
-            try:
-                context_cleared = context_manager.check_and_trim_context(llm, logger_instance=logger)
-                if context_cleared:
-                    need_system_prompt = True
-                    logger.info("Context cleared due to token usage threshold")
-            except Exception as e:
-                logger.warning("Context check failed: %s", e)
-                # Reason: Failure to check context usage shouldn't stop the conversation;
-                # we might hit the token limit later but we should try to proceed.
-                # Continue anyway, worst case we hit token limit
-
-            # Log user input
-            logger.debug("USER INPUT: %s", user_text)
-
-            # Build prompt: include system message if needed
-            # LLM maintains context internally, so we only send new messages
-            if need_system_prompt:
-                prompt = [
-                    message_formatter.messages_system(system_text),
-                    message_formatter.messages_user(user_text),
-                ]
-                need_system_prompt = False
-                logger.debug("Sending prompt to LLM (with system prompt):\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
-            else:
-                # Pass only the new user message (LLM maintains context internally)
-                prompt = [message_formatter.messages_user(user_text)]
-                logger.debug("Sending user message to LLM:\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
+            if context_manager.is_context_full(llm, context_threshold=config.CONTEXT_THRESHOLD, logger_instance=logger):
+                logger.info("Context limit reached. Clearing context and reloading from cache...")
+                context_manager.load_context_from_cache(llm, selected_tool_name, cache_dir, logger)
+            prompt = [message_formatter.messages_user(user_text)]
+            logger.debug("Sending user message to LLM:\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
 
             try:
                 # Use generate() for streaming output with on-the-fly filtering
@@ -245,7 +215,7 @@ def main() -> None:
                 continue
 
             # Parse tool call from raw response (before cleaning, as tool_call parsing needs the XML tags)
-            tool_call = text_processing.parse_function_call(raw_response)
+            tool_call = tool_parsing.parse_function_call(raw_response)
             if tool_call is None:
                 # No tool call; assistant answered directly
                 logger.debug("No tool call detected - LLM responded directly")
@@ -267,13 +237,7 @@ def main() -> None:
             tool_execution.print_tool_result(result)
 
             # Add tool result to LLM context for conversation continuity
-            # We need to use context_manager functions here
-            context_cleared = agent_utils.update_context_with_tool_result(
-                llm, result, system_text, user_text, logger
-            )
-            if context_cleared:
-                need_system_prompt = False
-
+            agent_utils.update_context_with_tool_result(llm, result, logger)
     except KeyboardInterrupt:
         print("\nShutting down...")
     finally:
