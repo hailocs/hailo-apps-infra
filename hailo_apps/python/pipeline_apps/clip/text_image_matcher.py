@@ -124,6 +124,23 @@ class TextImageMatcher:
             ensemble_embedding = torch.mean(text_features, dim=0).cpu().numpy().flatten()
         new_entry = TextEmbeddingEntry(text, ensemble_embedding, negative, ensemble)
         self.update_text_entries(new_entry, index)
+    
+    def add_text_hailo(self, text, embedding, index=None, negative=False, ensemble=False):
+        """
+        Add text with pre-computed Hailo-based embedding.
+        
+        This method allows adding text prompts using embeddings computed
+        by the Hailo text encoder instead of PyTorch CLIP model.
+        
+        Args:
+            text: Text string (for display/reference)
+            embedding: Pre-computed normalized text embedding from Hailo encoder
+            index: Optional index to update specific entry
+            negative: Whether this is a negative prompt
+            ensemble: Whether this was computed with ensemble
+        """
+        new_entry = TextEmbeddingEntry(text, embedding, negative, ensemble)
+        self.update_text_entries(new_entry, index)
 
     def get_embeddings(self):
         """Return a list of indexes to self.entries if entry.text != ""."""
@@ -222,6 +239,67 @@ class TextImageMatcher:
                 continue
             if report_all or new_match.passed_threshold:
                 results.append(new_match)
+        return results
+
+    def hailo_match(self, text_embedding_np, image_embedding_np, report_all=False):
+        """
+        Direct matching of text embeddings to image embeddings using cosine similarity.
+        
+        This is similar to the text retrieval evaluation approach - it matches a batch of 
+        text queries against a batch of image embeddings directly, without storing them
+        in the entries database.
+        
+        Args:
+            text_embedding_np: Text embedding(s), shape (batch_text, embedding_dim) or (embedding_dim,)
+            image_embedding_np: Image embedding(s), shape (batch_image, embedding_dim) or (embedding_dim,)
+            report_all: If True, return matches for all text-image pairs (not just above threshold)
+        
+        Returns:
+            List of Match objects, one for each text embedding, indicating the best matching image
+        """
+        # Ensure 2D arrays
+        if len(text_embedding_np.shape) == 1:
+            text_embedding_np = text_embedding_np.reshape(1, -1)
+        if len(image_embedding_np.shape) == 1:
+            image_embedding_np = image_embedding_np.reshape(1, -1)
+        
+        results = []
+        
+        # Compute cosine similarity: text @ image.T
+        # Shape: (num_texts, num_images)
+        logit_scale = 100  # Standard CLIP temperature scaling
+        logits_per_text = text_embedding_np @ image_embedding_np.T
+        
+        # Apply softmax with temperature scaling (similar to CLIP evaluation)
+        if self.run_softmax:
+            probabilities = np.exp(logit_scale * logits_per_text)
+            # Normalize per text (each text gets a probability distribution over images)
+            probabilities = probabilities / np.sum(probabilities, axis=1, keepdims=True)
+        else:
+            # Normalize raw similarity scores to [0, 1]
+            probabilities = (logits_per_text - 0.27) / (0.41 - 0.27)
+            probabilities = np.clip(probabilities, 0, 1)
+        
+        # For each text embedding, find the best matching image
+        for text_idx in range(text_embedding_np.shape[0]):
+            similarities = probabilities[text_idx]  # Similarities to all images
+            best_image_idx = np.argmax(similarities)
+            best_similarity = similarities[best_image_idx]
+            
+            # Create a match object
+            # Note: Using best_image_idx as entry_index since we don't have text entries here
+            new_match = Match(
+                row_idx=best_image_idx,  # Which image matched best
+                text=f"text_{text_idx}",  # Placeholder text identifier
+                similarity=best_similarity,
+                entry_index=text_idx,  # Text index
+                negative=False,  # No negative concept here
+                passed_threshold=best_similarity > self.threshold
+            )
+            
+            if report_all or new_match.passed_threshold:
+                results.append(new_match)
+        
         return results
 
 text_image_matcher = TextImageMatcher()

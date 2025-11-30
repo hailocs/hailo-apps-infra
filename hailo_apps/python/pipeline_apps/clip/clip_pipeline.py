@@ -12,7 +12,9 @@ from gi.repository import Gst
 
 # Local application-specific imports
 import hailo
+from hailo_platform import VDevice
 from hailo_apps.python.core.common.defines import (
+    CLIP_TEXT_ENCODER_PIPELINE,
     RESOURCES_SO_DIR_NAME, 
     RESOURCES_MODELS_DIR_NAME, 
     RESOURCES_VIDEOS_DIR_NAME,
@@ -20,7 +22,7 @@ from hailo_apps.python.core.common.defines import (
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME,
     CLIP_APP_TITLE,
     CLIP_VIDEO_NAME,
-    CLIP_PIPELINE,
+    CLIP_IMAGE_ENCODER_PIPELINE,
     CLIP_DETECTION_PIPELINE,
     CLIP_DETECTION_JSON_NAME,
     DETECTION_POSTPROCESS_SO_FILENAME,
@@ -42,6 +44,7 @@ from hailo_apps.python.core.gstreamer.gstreamer_helper_pipelines import (
 )
 from hailo_apps.python.pipeline_apps.clip.text_image_matcher import text_image_matcher
 from hailo_apps.python.pipeline_apps.clip import gui
+from hailo_apps.python.pipeline_apps.clip.clip_text_utils import run_text_encoder_inference
 # endregion
 
 class GStreamerClipApp(GStreamerApp):
@@ -78,7 +81,8 @@ class GStreamerClipApp(GStreamerApp):
             self.video_source = get_resource_path(pipeline_name=None, resource_type=RESOURCES_VIDEOS_DIR_NAME, model=BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
 
         self.hef_path_detection = get_resource_path(pipeline_name=CLIP_DETECTION_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
-        self.hef_path_clip = get_resource_path(pipeline_name=CLIP_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
+        self.hef_path_image_clip = get_resource_path(pipeline_name=CLIP_IMAGE_ENCODER_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
+        self.hef_path_text_clip = get_resource_path(pipeline_name=CLIP_TEXT_ENCODER_PIPELINE, resource_type=RESOURCES_MODELS_DIR_NAME)
 
         self.detection_config_json_path = get_resource_path(pipeline_name=None, resource_type=RESOURCES_JSON_DIR_NAME, model=CLIP_DETECTION_JSON_NAME)
 
@@ -101,7 +105,16 @@ class GStreamerClipApp(GStreamerApp):
         self.classified_tracks = set()  # Track which track_ids have already been classified
 
         self.matching_callback_name = 'matching_identity_callback'
-    
+        
+        # Initialize VDevice for text encoder inference
+        self.vdevice = VDevice()
+        self.example_prompt_text = 'Person'
+        self.hailo_text_embedding = run_text_encoder_inference(text=self.example_prompt_text, hef_path=self.hef_path_text_clip, vdevice=self.vdevice)
+        if self.text_embedding is not None:
+            self.text_image_matcher.add_text_hailo(self.example_prompt_text, self.text_embedding[0], negative=False)
+            print('Done add_text_hailo')
+        else:
+            print('Warning: Failed to compute text embedding during initialization')
         self.create_pipeline()
 
         identity = self.pipeline.get_by_name(self.matching_callback_name)
@@ -115,6 +128,8 @@ class GStreamerClipApp(GStreamerApp):
         super().run()
         
     def on_window_close(self, window, event):
+        if hasattr(self, 'vdevice') and self.vdevice is not None:
+            self.vdevice.release()
         self.loop.quit()
         return False
 
@@ -137,7 +152,7 @@ class GStreamerClipApp(GStreamerApp):
             detection_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(detection_pipeline)
 
         clip_pipeline = INFERENCE_PIPELINE(
-                hef_path=self.hef_path_clip,
+                hef_path=self.hef_path_image_clip,
                 post_process_so=self.post_process_so_clip,
                 post_function_name=self.clip_post_process_function_name,
                 batch_size=self.clip_batch_size,
@@ -172,7 +187,7 @@ class GStreamerClipApp(GStreamerApp):
         if self.detector == 'none':
             return (
                 f'{source_pipeline} ! '
-                f'{clip_pipeline_wrapper} ! '
+                f'{detection_pipeline_wrapper} ! '
                 f'{matching_callback_pipeline} ! '
                 f'{user_callback_pipeline} ! '
                 f'{overlay_pipeline} ! '
@@ -203,7 +218,7 @@ class GStreamerClipApp(GStreamerApp):
             detections = [roi]  # Use the ROI as the detection
         embeddings_np = None
         used_detection = []
-        track_id_focus = text_image_matcher.track_id_focus  # Used to focus on a specific track_id
+        track_id_focus = self.text_image_matcher.track_id_focus  # Used to focus on a specific track_id
         update_tracked_probability = None
         for detection in detections:
             results = detection.get_objects_typed(hailo.HAILO_MATRIX)
@@ -223,6 +238,21 @@ class GStreamerClipApp(GStreamerApp):
                     if track_id == track_id_focus:
                         update_tracked_probability = len(used_detection) - 1  # The focused detection was just appended, so its index is the last one
         if embeddings_np is not None:
+
+
+            
+            # Direct matching: text embeddings vs image embeddings (without storing in database)
+            # This returns which image best matches each text embedding
+            print('start')
+            hailo_matches = self.text_image_matcher.hailo_match(self.text_embedding, embeddings_np, report_all=True)
+            print(hailo_matches)
+            # hailo_matches: List[Match] where each Match contains:
+            #   - row_idx: index of best matching image in embeddings_np
+            #   - similarity: cosine similarity score
+            #   - passed_threshold: True if similarity > threshold
+
+            # Text embeddings are already precomputed in text_image_matcher.entries
+            # when add_text() or add_text_hailo() is called
             matches = text_image_matcher.match(embeddings_np, report_all=True, update_tracked_probability=update_tracked_probability)
             for match in matches:  # (row_idx - in embeddings_np or used_detection, text, similarity (confidence), entry_index - TextImageMatcher.entries - which text prompt matched best) = match
                 detection = used_detection[match.row_idx]

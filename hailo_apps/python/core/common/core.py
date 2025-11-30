@@ -41,12 +41,15 @@ from .defines import (
     RESOURCES_VIDEOS_DIR_NAME,
     SIMPLE_DETECTION_MODEL_NAME,
     SIMPLE_DETECTION_PIPELINE,
-    CLIP_PIPELINE,
-    CLIP_MODEL_NAME_H8,
-    CLIP_MODEL_NAME_H8L,
+    CLIP_IMAGE_ENCODER_PIPELINE,
+    CLIP_IMAGE_ENCODER_MODEL_NAME_H8,
+    CLIP_IMAGE_ENCODER_MODEL_NAME_H8L,
     CLIP_DETECTION_PIPELINE,
     CLIP_DETECTION_MODEL_NAME_H8,
     CLIP_DETECTION_MODEL_NAME_H8L,
+    CLIP_TEXT_ENCODER_PIPELINE,
+    CLIP_TEXT_ENCODER_MODEL_NAME_H8,
+    CLIP_TEXT_ENCODER_MODEL_NAME_H8L
 )
 from .hailo_logger import get_logger
 from .installation_utils import detect_hailo_arch
@@ -143,9 +146,12 @@ def get_model_name(pipeline_name: str, arch: str) -> str:
         CLIP_DETECTION_PIPELINE: CLIP_DETECTION_MODEL_NAME_H8
         if is_h8
         else CLIP_DETECTION_MODEL_NAME_H8L,
-        CLIP_PIPELINE: CLIP_MODEL_NAME_H8
+        CLIP_IMAGE_ENCODER_PIPELINE: CLIP_IMAGE_ENCODER_MODEL_NAME_H8
         if is_h8
-        else CLIP_MODEL_NAME_H8L
+        else CLIP_IMAGE_ENCODER_MODEL_NAME_H8L,
+        CLIP_TEXT_ENCODER_PIPELINE: CLIP_TEXT_ENCODER_MODEL_NAME_H8
+        if is_h8
+        else CLIP_TEXT_ENCODER_MODEL_NAME_H8L
     }
     name = pipeline_map[pipeline_name]
     hailo_logger.debug(f"Resolved model name: {name}")
