@@ -4,7 +4,7 @@ Voice-enabled Interactive CLI chat agent.
 Combines voice input/output capabilities with the tool-using chat agent.
 
 Usage:
-  python -m hailo_apps.hailo_app_python.tools.voice_chat_agent
+  python -m hailo_apps.python.standalone_apps.agent_tools_example.voice_chat_agent
 """
 
 from __future__ import annotations
@@ -13,14 +13,13 @@ import argparse
 import json
 import os
 import sys
-import threading
 import traceback
 from pathlib import Path
 
 from hailo_platform import VDevice
 from hailo_platform.genai import LLM
 
-from hailo_apps.python.core.gen_ai_utils.voice_processing.audio_recorder import AudioRecorder
+from hailo_apps.python.core.gen_ai_utils.voice_processing.interaction import VoiceInteractionManager
 from hailo_apps.python.core.gen_ai_utils.voice_processing.speech_to_text import SpeechToTextProcessor
 from hailo_apps.python.core.gen_ai_utils.voice_processing.text_to_speech import TextToSpeechProcessor
 from hailo_apps.python.core.gen_ai_utils.llm_utils import (
@@ -33,7 +32,6 @@ from hailo_apps.python.core.gen_ai_utils.llm_utils import (
     tool_parsing,
     tool_selection,
 )
-from hailo_apps.python.core.gen_ai_utils.llm_utils.terminal_ui import TerminalUI
 from hailo_apps.python.core.common.defines import SHARED_VDEVICE_GROUP_ID
 
 try:
@@ -56,27 +54,16 @@ class VoiceAgentApp:
         self.no_tts = no_tts
         self.selected_tool = selected_tool
         self.selected_tool_name = selected_tool.get("name", "")
-        self.need_system_prompt = True # Initialize default state
 
         # Initialize tools lookup
         self.tools_lookup = {self.selected_tool_name: selected_tool}
-
-        # Initialize recorder
-        try:
-            self.recorder = AudioRecorder(debug=debug)
-        except Exception as e:
-            print(f"[Error] Failed to initialize audio recorder: {e}")
-            raise
-
-        self.is_recording = False
-        self.lock = threading.Lock()
 
         print("Initializing AI components...")
 
         # Initialize Hailo VDevice and Models
         try:
             params = VDevice.create_params()
-            params.group_id = SHARED_VDEVICE_GROUP_ID
+            params.group_id = SHARED_VDEVICE_GROUP_ID # Support multiple processes using the same VDevice
             self.vdevice = VDevice(params)
         except Exception as e:
             print(f"[Error] Failed to create VDevice: {e}")
@@ -130,65 +117,21 @@ class VoiceAgentApp:
                 prompt = [message_formatter.messages_system(system_text)]
                 context_manager.add_to_context(self.llm, prompt, logger)
                 context_manager.save_context_to_cache(self.llm, self.selected_tool_name, cache_dir, logger)
-                self.need_system_prompt = False
             except Exception as e:
                 logger.error("Failed to initialize system context: %s", e)
-                # Fallback: try to send system prompt with first message
-                self.need_system_prompt = True
         else:
             logger.info("Loaded cached context.")
-            self.need_system_prompt = False
 
         self.system_text = system_text
 
-    def toggle_recording(self):
-        with self.lock:
-            if not self.is_recording:
-                self.start_recording()
-            else:
-                self.stop_recording()
-
-    def start_recording(self):
+    def on_processing_start(self):
         if self.tts:
             try:
                 self.tts.interrupt()
             except Exception as e:
                 logger.warning("Failed to interrupt TTS: %s", e)
 
-        try:
-            self.recorder.start()
-            self.is_recording = True
-            print("\n🔴 Recording started. Press SPACE to stop.")
-        except Exception as e:
-            print(f"[Error] Failed to start recording: {e}")
-            self.is_recording = False
-
-    def stop_recording(self):
-        print("\nProcessing... Please wait.")
-        try:
-            audio = self.recorder.stop()
-        except Exception as e:
-            print(f"[Error] Failed to stop recording: {e}")
-            self.is_recording = False
-            return
-
-        self.is_recording = False
-
-        if audio.size > 0:
-            self.process_audio(audio)
-        else:
-            print("No audio recorded.")
-
-        TerminalUI.show_banner(
-            title="Voice-Enabled Tool Agent",
-            controls={
-                "SPACE": "start/stop recording",
-                "Q": "quit",
-                "C": "clear context",
-            }
-        )
-
-    def process_audio(self, audio):
+    def on_audio_ready(self, audio):
         # 1. Transcribe
         try:
             user_text = self.s2t.transcribe(audio)
@@ -205,6 +148,24 @@ class VoiceAgentApp:
         # 2. Process with LLM and Tools
         self.process_interaction(user_text)
 
+    def on_clear_context(self):
+        if self.llm:
+            try:
+                self.llm.clear_context()
+                print("Context cleared.")
+
+                # Try to reload cached context after clearing
+                cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+                context_reloaded = context_manager.load_context_from_cache(
+                    self.llm, self.selected_tool_name, cache_dir, logger
+                )
+                if context_reloaded:
+                    logger.info("Context reloaded from cache after clear")
+                else:
+                    logger.info("No cache available after clear, will reinitialize on next message")
+            except Exception as e:
+                print(f"[Error] Failed to clear context: {e}")
+
     def process_interaction(self, user_text):
         # Check if we need to trim context based on actual token usage
         if context_manager.is_context_full(self.llm, context_threshold=config.CONTEXT_THRESHOLD, logger_instance=logger):
@@ -213,10 +174,8 @@ class VoiceAgentApp:
             cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
 
             if context_manager.load_context_from_cache(self.llm, self.selected_tool_name, cache_dir, logger):
-                self.need_system_prompt = False
                 logger.info("Context restored from cache")
             else:
-                self.need_system_prompt = True
                 logger.warning("Context cleared but failed to restore from cache")
 
         prompt = [message_formatter.messages_user(user_text)]
@@ -250,25 +209,13 @@ class VoiceAgentApp:
                     if self.tts:
                         sentence_buffer += cleaned
                         # Chunk speech
-                        # Simple chunking logic from AI pipeline
-                        delimiters = ['.', '?', '!']
-                        if not first_chunk_sent:
-                            delimiters.append(',')
+                        sentence_buffer = self._chunk_and_queue_speech(
+                            sentence_buffer, current_gen_id, not first_chunk_sent
+                        )
 
-                        while True:
-                            positions = {sentence_buffer.find(d): d for d in delimiters if sentence_buffer.find(d) != -1}
-                            if not positions:
-                                break
+                        if not first_chunk_sent and not self.tts.speech_queue.empty():
+                            first_chunk_sent = True
 
-                            first_pos = min(positions.keys())
-                            chunk = sentence_buffer[:first_pos + 1]
-
-                            if chunk.strip():
-                                self.tts.queue_text(chunk.strip(), current_gen_id)
-                                if not first_chunk_sent:
-                                    first_chunk_sent = True
-
-                            sentence_buffer = sentence_buffer[first_pos + 1:]
         except Exception as e:
             print(f"\n[Error] LLM generation failed: {e}")
             logger.error("LLM generation error: %s", traceback.format_exc())
@@ -291,6 +238,28 @@ class VoiceAgentApp:
         if tool_call:
             self.handle_tool_call(tool_call)
 
+    def _chunk_and_queue_speech(self, buffer, gen_id, is_first_chunk):
+        # Use a comma as a delimiter only for the first chunk for faster response.
+        delimiters = ['.', '?', '!']
+        if is_first_chunk:
+            delimiters.append(',')
+
+        while True:
+            # Find the first occurrence of any delimiter.
+            positions = {buffer.find(d): d for d in delimiters if buffer.find(d) != -1}
+            if not positions:
+                break  # No delimiters found
+
+            first_pos = min(positions.keys())
+            chunk = buffer[:first_pos + 1]
+
+            if chunk.strip():
+                self.tts.queue_text(chunk.strip(), gen_id)
+
+            buffer = buffer[first_pos + 1:]
+
+        return buffer
+
     def handle_tool_call(self, tool_call):
         # Execute tool
         result = tool_execution.execute_tool_call(tool_call, self.tools_lookup)
@@ -310,22 +279,9 @@ class VoiceAgentApp:
         agent_utils.update_context_with_tool_result(self.llm, result, logger)
 
     def close(self):
-        print("\nShutting down...")
-        if self.is_recording:
-            try:
-                self.recorder.stop()
-            except Exception:
-                pass
-
         if self.tts:
             try:
                 self.tts.stop()
-            except Exception:
-                pass
-
-        if hasattr(self, 'recorder'):
-            try:
-                self.recorder.close()
             except Exception:
                 pass
 
@@ -393,52 +349,16 @@ def main():
         # Error already printed in __init__
         return
 
-    TerminalUI.show_banner(
+    interaction = VoiceInteractionManager(
         title="Voice-Enabled Tool Agent",
-        controls={
-            "SPACE": "start/stop recording",
-            "Q": "quit",
-            "C": "clear context",
-        }
+        on_audio_ready=app.on_audio_ready,
+        on_processing_start=app.on_processing_start,
+        on_clear_context=app.on_clear_context,
+        on_shutdown=app.close,
+        debug=args.debug
     )
 
-    while True:
-        try:
-            ch = TerminalUI.get_char().lower()
-            if ch == "q":
-                app.close()
-                break
-            elif ch == " ":
-                app.toggle_recording()
-            elif ch == "\x03":
-                app.close()
-                break
-            elif ch == "c":
-                if app.llm:
-                    try:
-                        app.llm.clear_context()
-                        print("Context cleared.")
-
-                        # Try to reload cached context after clearing
-                        cache_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-                        context_reloaded = context_manager.load_context_from_cache(
-                            app.llm, app.selected_tool_name, cache_dir, logger
-                        )
-                        if context_reloaded:
-                            app.need_system_prompt = False
-                            logger.info("Context reloaded from cache after clear")
-                        else:
-                            app.need_system_prompt = True
-                            logger.info("No cache available after clear, will reinitialize on next message")
-                    except Exception as e:
-                        print(f"[Error] Failed to clear context: {e}")
-                        app.need_system_prompt = True
-        except KeyboardInterrupt:
-            app.close()
-            break
-        except Exception as e:
-            print(f"[Error] Unexpected error in main loop: {e}")
-            logger.error(traceback.format_exc())
+    interaction.run()
 
 
 if __name__ == "__main__":

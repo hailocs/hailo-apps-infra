@@ -4,11 +4,10 @@ This module provides components for building voice-enabled applications using Ha
 
 ## Components
 
+- **`VoiceInteractionManager`**: Manages the interaction loop, including recording, user input handling, and callback execution.
 - **`AudioRecorder`**: Handles microphone recording using PyAudio
 - **`SpeechToTextProcessor`**: Wraps Hailo's Speech2Text API (Whisper model)
-- **`LLMProcessor`**: Wraps Hailo's LLM API for text generation
 - **`TextToSpeechProcessor`**: Handles speech synthesis using Piper TTS
-- **`AIPipeline`**: Orchestrates the complete voice processing flow (S2T → LLM → TTS)
 
 ## Installation
 
@@ -26,7 +25,7 @@ The Piper TTS model files must be installed in the centralized location: `local_
 # 1. Navigate to the repository root
 cd /path/to/hailo-apps-infra
 
-# 2. Navigate to the piper_models directory (already exists in the repo)
+# 2. Navigate to the piper_models directory
 cd local_resources/piper_models
 
 # 3. Download the default voice model (en_US-amy-low)
@@ -80,21 +79,29 @@ Piper supports many voice models in different languages and styles. To use a dif
 
 ## Usage
 
-### Basic Usage
+### Voice Interaction Manager
+
+The `VoiceInteractionManager` simplifies building voice applications by handling the main loop and user controls.
 
 ```python
-from hailo_apps.python.core.gen_ai_utils.voice_processing.ai_pipeline import AIPipeline
+from hailo_apps.python.core.gen_ai_utils.voice_processing.interaction import VoiceInteractionManager
 
-# Initialize the complete voice pipeline
-pipeline = AIPipeline(no_tts=False)
+def on_audio_ready(audio_data):
+    # Process audio here (e.g., transcribe)
+    print("Audio received")
 
-# Process audio input
-import numpy as np
-audio_data = np.array([...])  # Your audio data (16kHz, mono)
-pipeline.process(audio_data)
+def on_processing_start():
+    # Optional: Stop TTS playback or prepare system
+    pass
 
-# Cleanup
-pipeline.close()
+manager = VoiceInteractionManager(
+    title="My Voice App",
+    on_audio_ready=on_audio_ready,
+    on_processing_start=on_processing_start
+)
+
+# Start the interaction loop
+manager.run()
 ```
 
 ### Individual Components
@@ -116,13 +123,24 @@ print(f"Transcribed: {text}")
 #### LLM Processing
 
 ```python
-from hailo_apps.python.core.gen_ai_utils.voice_processing.llm_processor import LLMProcessor
+from hailo_platform.genai import LLM
+from hailo_apps.python.core.common.core import get_resource_path
+from hailo_apps.python.core.common.defines import RESOURCES_MODELS_DIR_NAME, LLM_MODEL_NAME_H10
 
-llm = LLMProcessor(vdevice)
+# Get model path
+model_path = str(get_resource_path(
+    pipeline_name=None,
+    resource_type=RESOURCES_MODELS_DIR_NAME,
+    model=LLM_MODEL_NAME_H10
+))
+
+llm = LLM(vdevice, model_path)
 
 # Generate response
-for token in llm.generate("Hello, how are you?"):
-    print(token, end="", flush=True)
+prompt = [{'role': 'user', 'content': "Hello, how are you?"}]
+with llm.generate(prompt) as gen:
+    for token in gen:
+        print(token, end="", flush=True)
 
 # Clear context
 llm.clear_context()
@@ -250,15 +268,13 @@ See their respective README files for application-specific setup and usage.
 ## API Reference
 
 For detailed API documentation, see the docstrings in each module:
+- `interaction.py`
 - `audio_recorder.py`
 - `speech_to_text.py`
-- `llm_processor.py`
 - `text_to_speech.py`
-- `ai_pipeline.py`
 
 ## Additional Resources
 
 - **Piper TTS Documentation**: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md
 - **Hailo Platform Documentation**: https://hailo.ai/developer-zone/documentation/
 - **PyAudio Documentation**: https://people.csail.mit.edu/hubert/pyaudio/docs/
-

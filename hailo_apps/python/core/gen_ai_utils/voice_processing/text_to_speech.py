@@ -60,15 +60,7 @@ def check_piper_model_installed(onnx_path: str = TTS_ONNX_PATH, json_path: str =
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     PIPER TTS MODEL NOT FOUND                                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
-
-The following Piper TTS model file(s) are missing:
-{chr(10).join(f"  - {f}" for f in missing_files)}
-
-INSTALLATION REQUIRED:
-──────────────────────────────────────────────────────────────────────────────
-
 Please install the Piper TTS model before running this application.
-
 For detailed installation instructions, see:
   hailo_apps/python/core/gen_ai_utils/voice_processing/README.md
 

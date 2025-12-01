@@ -136,6 +136,11 @@ class StreamingTextFilter:
             return remaining
         # Also clean up any partial tags that might remain in buffer
         cleaned = self.buffer.replace("</text", "").replace("text>", "").replace("<text", "")
+
+        # Remove orphan '<' which might be left over from <<|im_end|> or incomplete tags
+        if cleaned.strip() == "<":
+            return ""
+
         return cleaned
 
 

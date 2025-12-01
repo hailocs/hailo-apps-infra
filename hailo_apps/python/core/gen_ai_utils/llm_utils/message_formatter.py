@@ -1,7 +1,7 @@
 """
 Message formatting utilities for LLM interactions.
 
-Provides helper functions to create formatted messages for system, user, and assistant roles.
+Provides helper functions to create formatted messages for system, user, assistant, and tool roles.
 """
 
 from typing import Any, Dict
@@ -45,3 +45,15 @@ def messages_assistant(text: str) -> Dict[str, Any]:
     """
     return {"role": "assistant", "content": [{"type": "text", "text": text}]}
 
+
+def messages_tool(text: str) -> Dict[str, Any]:
+    """
+    Create a tool message in the format expected by Hailo LLM.
+
+    Args:
+        text (str): Tool message text.
+
+    Returns:
+        Dict[str, Any]: Formatted message dictionary.
+    """
+    return {"role": "tool", "content": [{"type": "text", "text": text}]}

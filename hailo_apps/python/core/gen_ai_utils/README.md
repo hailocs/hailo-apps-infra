@@ -15,22 +15,25 @@ The package is organized into the following modules:
 
 Provides components for building voice-enabled applications.
 
+- **`VoiceInteractionManager`**: Manages the interaction loop, recording, and UI.
 - **`AudioRecorder`**: Handles microphone recording using PyAudio.
 - **`SpeechToTextProcessor`**: Wraps Hailo's Speech2Text API (Whisper).
-- **`LLMProcessor`**: Wraps Hailo's LLM API for text generation.
 - **`TextToSpeechProcessor`**: Handles speech synthesis using Piper TTS.
-- **`AIPipeline`**: Orchestrates the flow between S2T, LLM, and TTS.
 
 #### Usage Example
 
 ```python
-from hailo_apps.python.core.gen_ai_utils.voice_processing.ai_pipeline import AIPipeline
+from hailo_apps.python.core.gen_ai_utils.voice_processing.interaction import VoiceInteractionManager
 
-# Initialize pipeline
-pipeline = AIPipeline(no_tts=False)
+# Callbacks for the manager
+def on_audio_ready(audio):
+    pass
 
-# Process audio
-response_text = pipeline.process(audio_data)
+manager = VoiceInteractionManager(
+    title="My App",
+    on_audio_ready=on_audio_ready
+)
+manager.run()
 ```
 
 ### LLM Utilities (`llm_utils`)
@@ -82,4 +85,3 @@ To use these utilities in your standalone application:
 2. Ensure `hailo_apps` is in your Python path.
 3. If using voice processing, install the Piper TTS model (see above).
 4. Follow the usage examples above.
-

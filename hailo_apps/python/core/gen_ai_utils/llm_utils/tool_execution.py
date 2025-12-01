@@ -114,3 +114,4 @@ def print_tool_result(result: Dict[str, Any]) -> None:
         error_msg = result.get("error", "Unknown error")
         logger.info("Tool execution: FAILED - %s", error_msg)
         print(f"\n[Tool Error] {error_msg}\n")
+

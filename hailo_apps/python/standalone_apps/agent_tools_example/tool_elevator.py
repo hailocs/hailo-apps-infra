@@ -217,14 +217,14 @@ def run(input_dict: dict[str, Any]) -> dict[str, Any]:
     if current_floor == target_floor:
         return {
             "ok": True,
-            "result": f"You are already on Floor {target_floor}: {floor_info['name']}. {floor_info['description']}"
+            "result": f"You are already on Floor {target_floor}: {floor_info['name']}."
         }
 
     # Move to target floor
     elevator.move_to_floor(target_floor)
 
     # Build result message
-    result = f"Moved to Floor {target_floor}: {floor_info['name']}. {floor_info['description']}"
+    result = f"Moved to Floor {target_floor}: {floor_info['name']}."
 
     return {
         "ok": True,

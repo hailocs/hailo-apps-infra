@@ -39,7 +39,7 @@ def update_context_with_tool_result(
     log.debug("Adding tool result to LLM context:\n%s", tool_response_message)
 
     # LLM has context, just add the tool result
-    prompt = [message_formatter.messages_user(tool_response_message)]
+    prompt = [message_formatter.messages_tool(tool_response_message)]
 
     # Add to context by making a minimal generation (just to update context)
     log.debug("Updating LLM context with tool result")

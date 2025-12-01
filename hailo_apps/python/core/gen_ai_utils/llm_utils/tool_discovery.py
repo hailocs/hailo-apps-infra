@@ -5,38 +5,64 @@ Handles automatic discovery and collection of tool modules.
 """
 
 import importlib
+import logging
 import pkgutil
 import sys
+import traceback
 from pathlib import Path
 from types import ModuleType
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
-def discover_tool_modules() -> List[ModuleType]:
+def discover_tool_modules(tool_dir: Optional[Path] = None) -> List[ModuleType]:
     """
     Discover tool modules from files named 'tool_*.py' in the tools directory.
+
+    Args:
+        tool_dir: Directory to search for tools. If None, searches the current directory.
 
     Returns:
         List of imported tool modules
     """
     modules: List[ModuleType] = []
-    current_dir = Path(__file__).parent
 
-    # Ensure current directory is in sys.path (works from any directory)
-    if str(current_dir) not in sys.path:
-        sys.path.insert(0, str(current_dir))
+    if tool_dir is None:
+        # Fallback to current directory if not provided (legacy behavior support)
+        target_dir = Path(__file__).parent
+    else:
+        target_dir = tool_dir
+
+    # Ensure target directory is in sys.path
+    if str(target_dir) not in sys.path:
+        sys.path.insert(0, str(target_dir))
 
     # Build module name: use package prefix if available, otherwise just module name
-    package_prefix = f"{__package__}." if __package__ else ""
+    # Note: When importing from a dynamic path added to sys.path, we might not have a package prefix
+    # or we might need to rely on the file name being importable directly.
+    package_prefix = ""
+    # If we are scanning a directory added to sys.path, we can import modules by name directly.
+    # The original code used __package__ because it was inside the package.
+    # When scanning an external dir, we don't prepend the current package name.
 
-    for module_info in pkgutil.iter_modules([str(current_dir)]):
+    logger.debug("Discovering tools in %s", target_dir)
+
+    for module_info in pkgutil.iter_modules([str(target_dir)]):
         if not module_info.name.startswith("tool_"):
             continue
+
+        module_name = module_info.name
         try:
-            module_name = f"{package_prefix}{module_info.name}"
+            logger.debug("Importing module: %s", module_name)
             modules.append(importlib.import_module(module_name))
-        except Exception:
+        except Exception as e:
+            # Reason: Log detailed error but don't crash app if one tool is broken
+            logger.error("Failed to import tool module '%s': %s", module_name, e)
+            logger.debug(traceback.format_exc())
             continue
+
     return modules
 
 
@@ -58,32 +84,52 @@ def collect_tools(modules: List[ModuleType]) -> List[Dict[str, Any]]:
     """
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
+
     for m in modules:
+        module_filename = getattr(m, "__file__", "unknown")
+
+        # Check for run function
         run_fn = getattr(m, "run", None)
-        # Skip template tool to avoid confusing the model
-        module_name = getattr(m, "name", None)
-        if module_name == "template_tool":
+        if not callable(run_fn):
+            logger.warning("Skipping module %s: missing 'run' function", module_filename)
             continue
 
+        # Check for template or example tools that shouldn't be loaded
+        module_tool_name = getattr(m, "name", None)
+        if module_tool_name == "template_tool" or module_tool_name == "mytool":
+            logger.debug("Skipping template tool in %s", module_filename)
+            continue
+
+        # Get metadata attributes
         tool_schemas = getattr(m, "TOOLS_SCHEMA", None)
         display_description = getattr(m, "display_description", None)
         llm_description_attr = getattr(m, "description", None)
 
+        # Parse TOOLS_SCHEMA
         if tool_schemas and isinstance(tool_schemas, list):
             for entry in tool_schemas:
                 if not isinstance(entry, dict):
+                    logger.warning("Skipping invalid schema entry in %s: expected dict, got %s", module_filename, type(entry))
                     continue
+
                 if entry.get("type") != "function":
                     continue
+
                 function_def = entry.get("function", {})
                 name = function_def.get("name")
                 description = function_def.get("description", llm_description_attr or "")
-                if not name or not callable(run_fn):
+
+                if not name:
+                    logger.warning("Skipping unnamed tool in %s", module_filename)
                     continue
+
                 if name in seen_names:
+                    logger.warning("Skipping duplicate tool name '%s' in %s", name, module_filename)
                     continue
+
                 seen_names.add(name)
                 display_desc = display_description if display_description else description or name
+
                 tools.append(
                     {
                         "name": str(name),
@@ -94,36 +140,9 @@ def collect_tools(modules: List[ModuleType]) -> List[Dict[str, Any]]:
                         "module": m,
                     }
                 )
-            continue
+        else:
+            logger.warning("Skipping module %s: missing or invalid 'TOOLS_SCHEMA'", module_filename)
 
-        # Legacy fallback: build schema on the fly if TOOLS_SCHEMA not provided
-        name = getattr(m, "name", None)
-        llm_description = llm_description_attr
-        schema = getattr(m, "schema", None)
-        if name and llm_description and callable(run_fn):
-            if name in seen_names:
-                continue
-            seen_names.add(name)
-            display_desc = display_description if display_description else llm_description
-            parameters = schema if isinstance(schema, dict) else {"type": "object", "properties": {}}
-            tool_def = {
-                "type": "function",
-                "function": {
-                    "name": str(name),
-                    "description": str(llm_description),
-                    "parameters": parameters,
-                },
-            }
-            tools.append(
-                {
-                    "name": str(name),
-                    "display_description": str(display_desc),
-                    "llm_description": str(llm_description),
-                    "tool_def": tool_def,
-                    "runner": run_fn,
-                    "module": m,
-                }
-            )
     tools.sort(key=lambda t: t["name"])
     return tools
 

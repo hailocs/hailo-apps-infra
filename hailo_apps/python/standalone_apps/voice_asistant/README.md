@@ -106,21 +106,19 @@ ctl.!default {
 
 ## Files
 
-- `main.py` - Main application with terminal-based voice interface
-- `processing.py` - AI pipeline with S2T, LLM, and TTS integration
-- `recorder.py` - Audio recording and processing module
+- `voice_asistant.py` - Main application with terminal-based voice interface
 
 ## Usage
 
 1. Run the application:
    ```bash
-   python main.py
+   python voice_asistant.py
    ```
 
 2. Optional flags:
    ```bash
-   python main.py --debug      # Enable audio file saving
-   python main.py --no-tts     # Disable text-to-speech
+   python voice_asistant.py --debug      # Enable audio file saving
+   python voice_asistant.py --no-tts     # Disable text-to-speech
    ```
 
 3. **Interactive controls**:
@@ -132,7 +130,7 @@ ctl.!default {
 ## How it works
 
 The application uses a threaded architecture to handle:
-- Real-time audio capture and processing
+- Real-time audio capture and processing via `VoiceInteractionManager`
 - Hailo Speech-to-Text transcription
 - Large Language Model inference for responses
 - Streaming text-to-speech synthesis with interruption support

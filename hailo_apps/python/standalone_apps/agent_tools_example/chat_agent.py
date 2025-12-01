@@ -133,7 +133,6 @@ def main() -> None:
 
         if context_loaded:
             # Context was loaded from cache, system prompt already in context
-            need_system_prompt = False
             logger.info("Using cached context for tool '%s'", selected_tool_name)
         else:
             # No cache found, initialize system prompt and save context
@@ -143,12 +142,9 @@ def main() -> None:
                 context_manager.add_to_context(llm, prompt, logger)
                 context_manager.save_context_to_cache(llm, selected_tool_name, cache_dir, logger)
                 # System prompt is now in context
-                need_system_prompt = False
             except Exception as e:
                 logger.error("Failed to initialize system context: %s", e)
                 print(f"[Error] Failed to initialize AI context: {e}")
-                # Force system prompt on next message as fallback
-                need_system_prompt = True
 
         # Create a lookup dict for execution (only selected tool)
         tools_lookup = {selected_tool_name: selected_tool}
@@ -176,14 +172,11 @@ def main() -> None:
                     # Try to reload cached context after clearing
                     context_reloaded = context_manager.load_context_from_cache(llm, selected_tool_name, cache_dir, logger)
                     if context_reloaded:
-                        need_system_prompt = False
                         logger.info("Context reloaded from cache after clear")
                     else:
-                        need_system_prompt = True
                         logger.info("No cache available after clear, will reinitialize on next message")
                 except Exception as e:
                     print(f"[Error] Failed to clear context: {e}")
-                    need_system_prompt = True
                 continue
             if user_text.lower() in {"/context"}:
                 try:
