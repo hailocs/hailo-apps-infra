@@ -29,6 +29,7 @@ dist/
 *.egg
 *.egg-info/
 .cache/
+*.cache
 coverage/
 
 .venv/
