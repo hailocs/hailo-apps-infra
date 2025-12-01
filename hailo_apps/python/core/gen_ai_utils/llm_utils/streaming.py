@@ -5,7 +5,7 @@ Handles streaming tokens, filtering XML tags, and cleaning up response content.
 """
 
 import re
-from typing import Any, List, Optional
+from typing import Callable, List, Optional
 
 from hailo_platform.genai import LLM
 
@@ -152,6 +152,7 @@ def generate_and_stream_response(
     max_tokens: int = 200,
     prefix: str = "Assistant: ",
     debug_mode: bool = False,
+    token_callback: Optional[Callable[[str], None]] = None,
 ) -> str:
     """
     Generate response from LLM and stream it to stdout with filtering.
@@ -166,6 +167,8 @@ def generate_and_stream_response(
         max_tokens (int): Maximum tokens to generate. Defaults to 200.
         prefix (str): Prefix to print before streaming. Defaults to "Assistant: ".
         debug_mode (bool): If True, don't filter tokens (show raw output).
+        token_callback (Optional[Callable[[str], None]]): Optional callback function
+            called with each cleaned token/chunk. Useful for TTS integration.
 
     Returns:
         str: Raw response string (before filtering, for tool call parsing).
@@ -174,17 +177,31 @@ def generate_and_stream_response(
     response_parts: List[str] = []
     token_filter = StreamingTextFilter(debug_mode=debug_mode)
 
-    for token in llm.generate(
+    # Get recovery sequence to filter it out
+    recovery_seq = None
+    try:
+        recovery_seq = llm.get_generation_recovery_sequence()
+    except AttributeError:
+        pass
+
+    with llm.generate(
         prompt=prompt,
         temperature=temperature,
         seed=seed,
         max_generated_tokens=max_tokens,
-    ):
-        response_parts.append(token)
-        # Filter and print clean tokens on the fly
-        cleaned_chunk = token_filter.process_token(token)
-        if cleaned_chunk:
-            print(cleaned_chunk, end="", flush=True)
+    ) as gen:
+        for token in gen:
+            # Filter recovery sequence if present
+            if recovery_seq and token == recovery_seq:
+                continue
+
+            response_parts.append(token)
+            # Filter and print clean tokens on the fly
+            cleaned_chunk = token_filter.process_token(token)
+            if cleaned_chunk:
+                print(cleaned_chunk, end="", flush=True)
+                if token_callback:
+                    token_callback(cleaned_chunk)
 
     # Print any remaining content after streaming
     remaining = token_filter.get_remaining()
@@ -196,6 +213,9 @@ def generate_and_stream_response(
             remaining = re.sub(r"</?tool_call>?", "", remaining)  # </tool_call>, <tool_call>, etc.
             remaining = re.sub(r"<\|im_end\|>", "", remaining)  # Special tokens
         print(remaining, end="", flush=True)
+        if token_callback:
+            token_callback(remaining)
+
     print()  # New line after streaming completes
 
     raw_response = "".join(response_parts)
@@ -230,4 +250,3 @@ def clean_response(response: str) -> str:
 
     # Clean up any remaining whitespace
     return cleaned.strip()
-

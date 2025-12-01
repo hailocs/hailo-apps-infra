@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import traceback
@@ -181,84 +182,54 @@ class VoiceAgentApp:
         prompt = [message_formatter.messages_user(user_text)]
         logger.debug("Sending user message to LLM:\n%s", json.dumps(prompt, indent=2, ensure_ascii=False))
 
-
-        # Generate response
-        print("Assistant: ", end="", flush=True)
-
-        full_response = ""
-        sentence_buffer = ""
-        first_chunk_sent = False
-
+        # Prepare for streaming response
         current_gen_id = None
+        # Using a mutable container to track state inside inner function
+        state = {
+            'sentence_buffer': "",
+            'first_chunk_sent': False
+        }
+
         if self.tts:
-            # Reason: Clear any pending speech to respond to new input immediately
+            # Clear any pending speech to respond to new input immediately
             self.tts.clear_interruption()
             current_gen_id = self.tts.get_current_gen_id()
 
-        # Reason: Filter output to hide XML tags from user while accumulating them for parsing
-        token_filter = streaming.StreamingTextFilter(debug_mode=self.debug)
+        def tts_callback(chunk: str):
+            if self.tts:
+                state['sentence_buffer'] += chunk
+                # Chunk speech
+                state['sentence_buffer'] = self.tts.chunk_and_queue(
+                    state['sentence_buffer'], current_gen_id, not state['first_chunk_sent']
+                )
 
-        # Generator loop
+                if not state['first_chunk_sent'] and not self.tts.speech_queue.empty():
+                    state['first_chunk_sent'] = True
+
         try:
-            for token in self.llm.generate(prompt, temperature=config.TEMPERATURE):
-                full_response += token
-                cleaned = token_filter.process_token(token)
-
-                if cleaned:
-                    print(cleaned, end="", flush=True)
-                    if self.tts:
-                        sentence_buffer += cleaned
-                        # Chunk speech
-                        sentence_buffer = self._chunk_and_queue_speech(
-                            sentence_buffer, current_gen_id, not first_chunk_sent
-                        )
-
-                        if not first_chunk_sent and not self.tts.speech_queue.empty():
-                            first_chunk_sent = True
-
+            # Use generate() for streaming output with on-the-fly filtering and TTS callback
+            is_debug = logger.level == logging.DEBUG
+            raw_response = streaming.generate_and_stream_response(
+                llm=self.llm,
+                prompt=prompt,
+                temperature=config.TEMPERATURE,
+                prefix="Assistant: ",
+                debug_mode=is_debug,
+                token_callback=tts_callback
+            )
         except Exception as e:
             print(f"\n[Error] LLM generation failed: {e}")
             logger.error("LLM generation error: %s", traceback.format_exc())
             return
 
         # Flush remaining speech
-        remaining_text = token_filter.get_remaining()
-        if remaining_text:
-            print(remaining_text, end="", flush=True)
-            if self.tts:
-                sentence_buffer += remaining_text
-
-        if self.tts and sentence_buffer.strip():
-            self.tts.queue_text(sentence_buffer.strip(), current_gen_id)
-
-        print()
+        if self.tts and state['sentence_buffer'].strip():
+            self.tts.queue_text(state['sentence_buffer'].strip(), current_gen_id)
 
         # Check for tool calls
-        tool_call = tool_parsing.parse_function_call(full_response)
+        tool_call = tool_parsing.parse_function_call(raw_response)
         if tool_call:
             self.handle_tool_call(tool_call)
-
-    def _chunk_and_queue_speech(self, buffer, gen_id, is_first_chunk):
-        # Use a comma as a delimiter only for the first chunk for faster response.
-        delimiters = ['.', '?', '!']
-        if is_first_chunk:
-            delimiters.append(',')
-
-        while True:
-            # Find the first occurrence of any delimiter.
-            positions = {buffer.find(d): d for d in delimiters if buffer.find(d) != -1}
-            if not positions:
-                break  # No delimiters found
-
-            first_pos = min(positions.keys())
-            chunk = buffer[:first_pos + 1]
-
-            if chunk.strip():
-                self.tts.queue_text(chunk.strip(), gen_id)
-
-            buffer = buffer[first_pos + 1:]
-
-        return buffer
 
     def handle_tool_call(self, tool_call):
         # Execute tool

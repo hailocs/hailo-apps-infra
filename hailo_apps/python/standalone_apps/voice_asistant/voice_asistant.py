@@ -10,6 +10,7 @@ from hailo_apps.python.core.common.core import get_resource_path
 from hailo_apps.python.core.gen_ai_utils.voice_processing.interaction import VoiceInteractionManager
 from hailo_apps.python.core.gen_ai_utils.voice_processing.speech_to_text import SpeechToTextProcessor
 from hailo_apps.python.core.gen_ai_utils.voice_processing.text_to_speech import TextToSpeechProcessor
+from hailo_apps.python.core.gen_ai_utils.llm_utils import streaming
 
 
 class VoiceAssistantApp:
@@ -49,7 +50,6 @@ class VoiceAssistantApp:
             # model_path = "/path/to/your/custom_model.hef"
 
             self.llm = LLM(self.vdevice, model_path)
-            self._recovery_seq = self.llm.get_generation_recovery_sequence()
 
             # 4. TTS
             self.tts = None
@@ -74,65 +74,48 @@ class VoiceAssistantApp:
 
         # 2. Prepare TTS
         current_gen_id = None
+        # Use a mutable container to track state inside callback
+        state = {
+            'sentence_buffer': "",
+            'first_chunk_sent': False
+        }
+
         if self.tts:
             self.tts.clear_interruption()
             current_gen_id = self.tts.get_current_gen_id()
 
         # 3. Generate Response
-        prompt = LLM_PROMPT_PREFIX + user_text
+        prompt_text = LLM_PROMPT_PREFIX + user_text
 
         # Format prompt as a list of messages for the LLM
-        formatted_prompt = [{'role': 'user', 'content': prompt}]
+        formatted_prompt = [{'role': 'user', 'content': prompt_text}]
 
-        output = ''
-        sentence_buffer = ''
-        first_chunk_sent = False
+        def tts_callback(chunk: str):
+            if self.tts:
+                state['sentence_buffer'] += chunk
+                # Chunk and queue speech using the centralized method
+                state['sentence_buffer'] = self.tts.chunk_and_queue(
+                    state['sentence_buffer'], current_gen_id, not state['first_chunk_sent']
+                )
 
-        with self.llm.generate(prompt=formatted_prompt) as gen:
-            for token in gen:
-                if token == self._recovery_seq:
-                    continue
+                if not state['first_chunk_sent'] and not self.tts.speech_queue.empty():
+                    state['first_chunk_sent'] = True
 
-                print(token, end='', flush=True)
-                output += token
-
-                if self.tts:
-                    sentence_buffer += token
-                    # Chunk and queue speech
-                    sentence_buffer = self._chunk_and_queue_speech(
-                        sentence_buffer, current_gen_id, not first_chunk_sent
-                    )
-
-                    if not first_chunk_sent and not self.tts.speech_queue.empty():
-                        first_chunk_sent = True
+        # Use streaming utility to handle generation, printing, and TTS callback
+        # Note: simple voice assistant might not use tools, so filtered output should be clean text
+        streaming.generate_and_stream_response(
+            llm=self.llm,
+            prompt=formatted_prompt,
+            prefix="", # No prefix for this app
+            debug_mode=self.debug,
+            token_callback=tts_callback
+        )
 
         # 4. Send remaining text
-        if self.tts and sentence_buffer.strip():
-            self.tts.queue_text(sentence_buffer.strip(), current_gen_id)
+        if self.tts and state['sentence_buffer'].strip():
+            self.tts.queue_text(state['sentence_buffer'].strip(), current_gen_id)
 
         print()
-
-    def _chunk_and_queue_speech(self, buffer, gen_id, is_first_chunk):
-        # Use a comma as a delimiter only for the first chunk for faster response.
-        delimiters = ['.', '?', '!']
-        if is_first_chunk:
-            delimiters.append(',')
-
-        while True:
-            # Find the first occurrence of any delimiter.
-            positions = {buffer.find(d): d for d in delimiters if buffer.find(d) != -1}
-            if not positions:
-                break  # No delimiters found
-
-            first_pos = min(positions.keys())
-            chunk = buffer[:first_pos + 1]
-
-            if chunk.strip():
-                self.tts.queue_text(chunk.strip(), gen_id)
-
-            buffer = buffer[first_pos + 1:]
-
-        return buffer
 
     def on_clear_context(self):
         self.llm.clear_context()

@@ -6,6 +6,7 @@ This module handles speech synthesis using Piper TTS.
 
 import os
 import queue
+import re
 import subprocess
 import tempfile
 import threading
@@ -63,11 +64,57 @@ def check_piper_model_installed(onnx_path: str = TTS_ONNX_PATH, json_path: str =
 Please install the Piper TTS model before running this application.
 For detailed installation instructions, see:
   hailo_apps/python/core/gen_ai_utils/voice_processing/README.md
-
 """
         raise FileNotFoundError(error_msg)
 
     return True
+
+
+def clean_text_for_tts(text: str) -> str:
+    """
+    Clean text for TTS to prevent artifacts and noise.
+
+    Removes markdown formatting, special symbols, and characters that often cause
+    issues with Piper TTS (like white noise).
+
+    Args:
+        text (str): Input text.
+
+    Returns:
+        str: Cleaned text safe for TTS.
+    """
+    if not text:
+        return ""
+
+    # 1. Remove Markdown formatting
+    # Remove bold/italic asterisks/underscores (*, **, _, __)
+    text = re.sub(r"[*_]{1,3}", "", text)
+    # Remove code block backticks
+    text = re.sub(r"`+", "", text)
+    # Remove headers (#)
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+    # Remove links [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+    # 2. Remove noisy characters
+    # Filter out characters that are not:
+    # - Alphanumeric (a-z, A-Z, 0-9, including accents/unicode letters)
+    # - Basic punctuation (.,!?:;'-)
+    # - Whitespace
+    # - Currency symbols ($€£)
+    # - Percent (%)
+    # This regex keeps "word characters", spaces, and listed punctuation.
+    # \w includes alphanumeric + underscore, but we stripped underscore above if it was markdown.
+    # We allow underscore inside words if any remain, or we can be stricter.
+    # Let's be permissive with \w but strip specific problematic symbols.
+
+    # Common symbols causing noise: ~ @ ^ | \ < > { } [ ] #
+    text = re.sub(r"[~@^|\\<>{}\[\]#]", " ", text)
+
+    # 3. Normalize whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
 
 
 class TextToSpeechProcessor:
@@ -152,6 +199,39 @@ class TextToSpeechProcessor:
                 gen_id = self.generation_id
         self.speech_queue.put((gen_id, text))
 
+    def chunk_and_queue(self, buffer: str, gen_id: int, is_first_chunk: bool) -> str:
+        """
+        Chunk text buffer based on delimiters and queue for speech.
+
+        Args:
+            buffer (str): The accumulated text buffer.
+            gen_id (int): The generation ID for the speech.
+            is_first_chunk (bool): Whether this is the first chunk being processed.
+
+        Returns:
+            str: The remaining buffer after queuing complete chunks.
+        """
+        # Use a comma as a delimiter only for the first chunk for faster response.
+        delimiters = ['.', '?', '!']
+        if is_first_chunk:
+            delimiters.append(',')
+
+        while True:
+            # Find the first occurrence of any delimiter.
+            positions = {buffer.find(d): d for d in delimiters if buffer.find(d) != -1}
+            if not positions:
+                break  # No delimiters found
+
+            first_pos = min(positions.keys())
+            chunk = buffer[:first_pos + 1]
+
+            if chunk.strip():
+                self.queue_text(chunk.strip(), gen_id)
+
+            buffer = buffer[first_pos + 1:]
+
+        return buffer
+
     def get_current_gen_id(self) -> int:
         """Get the current generation ID."""
         with self._gen_id_lock:
@@ -200,6 +280,11 @@ class TextToSpeechProcessor:
         Args:
             text (str): The text to be spoken.
         """
+        # Clean text before synthesis to prevent artifacts
+        text = clean_text_for_tts(text)
+        if not text.strip():
+            return
+
         playback_process = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -236,4 +321,3 @@ class TextToSpeechProcessor:
                     and self.current_speech_process.pid == playback_process.pid
                 ):
                     self.current_speech_process = None
-

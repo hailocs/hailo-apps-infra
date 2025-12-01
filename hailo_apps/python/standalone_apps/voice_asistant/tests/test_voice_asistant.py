@@ -11,6 +11,11 @@ mock_piper = MagicMock()
 sys.modules['piper'] = mock_piper
 sys.modules['piper.voice'] = MagicMock()
 
+# Mock 'hailo_platform' and 'hailo_platform.genai' globally because streaming.py imports from it at module level
+mock_hailo_platform = MagicMock()
+sys.modules['hailo_platform'] = mock_hailo_platform
+sys.modules['hailo_platform.genai'] = MagicMock()
+
 from hailo_apps.python.standalone_apps.voice_asistant.voice_asistant import VoiceAssistantApp
 
 class TestVoiceAssistantApp(unittest.TestCase):
@@ -74,7 +79,8 @@ class TestVoiceAssistantApp(unittest.TestCase):
         mock_context_manager.__exit__.return_value = None
         self.mock_llm_instance.generate.return_value = mock_context_manager
 
-        # Mock TTS queue
+        # Mock TTS queue - We need to mock the chunk_and_queue method as well since it's used in the callback
+        self.mock_tts_instance.chunk_and_queue.side_effect = lambda buf, gid, is_first: "" if "Hi there" in buf else buf
         self.mock_tts_instance.speech_queue.empty.return_value = True
 
         # Run
@@ -84,14 +90,17 @@ class TestVoiceAssistantApp(unittest.TestCase):
         self.mock_s2t_instance.transcribe.assert_called_with(audio_data)
 
         # Verify LLM called with formatted prompt
-        # Note: We check if generate was called. The exact prompt might depend on constants imports.
         self.mock_llm_instance.generate.assert_called()
         call_args = self.mock_llm_instance.generate.call_args
         self.assertEqual(call_args.kwargs['prompt'][0]['role'], 'user')
         self.assertIn("Hello AI", call_args.kwargs['prompt'][0]['content'])
 
         # Verify TTS was called
-        self.assertTrue(self.mock_tts_instance.queue_text.called)
+        # queue_text might be called inside chunk_and_queue (which we mocked) or at end
+        # We mocked chunk_and_queue to simulate it returning empty buffer, meaning it consumed text.
+        # Since we can't easily verify side effects of the lambda inside the streaming function without more complex mocking,
+        # we rely on verifying that chunk_and_queue was called.
+        self.assertTrue(self.mock_tts_instance.chunk_and_queue.called)
 
     def test_close(self):
         """Test cleanup."""
