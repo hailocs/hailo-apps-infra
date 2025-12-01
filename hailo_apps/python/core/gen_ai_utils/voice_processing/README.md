@@ -94,10 +94,15 @@ def on_processing_start():
     # Optional: Stop TTS playback or prepare system
     pass
 
+def on_abort():
+    # Optional: Abort current operation
+    print("Aborting...")
+
 manager = VoiceInteractionManager(
     title="My Voice App",
     on_audio_ready=on_audio_ready,
-    on_processing_start=on_processing_start
+    on_processing_start=on_processing_start,
+    on_abort=on_abort
 )
 
 # Start the interaction loop

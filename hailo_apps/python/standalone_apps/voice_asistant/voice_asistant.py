@@ -1,4 +1,5 @@
 import argparse
+import threading
 from io import StringIO
 from contextlib import redirect_stderr
 
@@ -22,6 +23,7 @@ class VoiceAssistantApp:
     def __init__(self, debug=False, no_tts=False):
         self.debug = debug
         self.no_tts = no_tts
+        self.abort_event = threading.Event()
 
         print("Initializing AI components... (This might take a moment)")
 
@@ -59,10 +61,19 @@ class VoiceAssistantApp:
         print("✅ AI components ready!")
 
     def on_processing_start(self):
+        self.on_abort()
+        if self.tts:
+            self.tts.interrupt()
+
+    def on_abort(self):
+        """Abort current generation and speech."""
+        self.abort_event.set()
         if self.tts:
             self.tts.interrupt()
 
     def on_audio_ready(self, audio):
+        self.abort_event.clear()
+
         # 1. Transcribe
         user_text = self.s2t.transcribe(audio)
         if not user_text:
@@ -108,7 +119,8 @@ class VoiceAssistantApp:
             prompt=formatted_prompt,
             prefix="", # No prefix for this app
             debug_mode=self.debug,
-            token_callback=tts_callback
+            token_callback=tts_callback,
+            abort_callback=self.abort_event.is_set
         )
 
         # 4. Send remaining text
@@ -161,6 +173,7 @@ def main():
         on_processing_start=app.on_processing_start,
         on_clear_context=app.on_clear_context,
         on_shutdown=app.close,
+        on_abort=app.on_abort,
         debug=args.debug
     )
 

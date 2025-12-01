@@ -25,6 +25,7 @@ class VoiceInteractionManager:
         on_processing_start: Optional[Callable[[], None]] = None,
         on_clear_context: Optional[Callable[[], None]] = None,
         on_shutdown: Optional[Callable[[], None]] = None,
+        on_abort: Optional[Callable[[], None]] = None,
         debug: bool = False,
     ):
         """
@@ -34,6 +35,7 @@ class VoiceInteractionManager:
             on_processing_start (Callable): Callback when recording starts (e.g. to stop TTS).
             on_clear_context (Callable): Callback when 'C' is pressed.
             on_shutdown (Callable): Callback when 'Q' or Ctrl+C is pressed.
+            on_abort (Callable): Callback when 'X' is pressed.
             debug (bool): Enable debug logging for recorder.
         """
         self.title = title
@@ -41,6 +43,7 @@ class VoiceInteractionManager:
         self.on_processing_start = on_processing_start
         self.on_clear_context = on_clear_context
         self.on_shutdown = on_shutdown
+        self.on_abort = on_abort
         self.debug = debug
 
         self.recorder = AudioRecorder(debug=debug)
@@ -51,6 +54,7 @@ class VoiceInteractionManager:
             "SPACE": "start/stop recording",
             "Q": "quit",
             "C": "clear context",
+            "X": "abort generation",
         }
 
     def run(self):
@@ -71,6 +75,9 @@ class VoiceInteractionManager:
                 elif ch == "c":
                     if self.on_clear_context:
                         self.on_clear_context()
+                elif ch == "x":
+                    if self.on_abort:
+                        self.on_abort()
         except KeyboardInterrupt:
             self.close()
         except Exception as e:
@@ -113,11 +120,22 @@ class VoiceInteractionManager:
 
         if audio.size > 0:
             if self.on_audio_ready:
-                self.on_audio_ready(audio)
+                # Run processing in a separate thread to keep UI responsive (for abort)
+                def processing_wrapper():
+                    try:
+                        self.on_audio_ready(audio)
+                    except Exception as e:
+                        print(f"\n[Error] Processing failed: {e}")
+                        if self.debug:
+                            traceback.print_exc()
+                    finally:
+                        # Show banner again after processing is done
+                        TerminalUI.show_banner(title=self.title, controls=self.controls)
+
+                threading.Thread(target=processing_wrapper, daemon=True).start()
         else:
             print("No audio recorded.")
-
-        TerminalUI.show_banner(title=self.title, controls=self.controls)
+            TerminalUI.show_banner(title=self.title, controls=self.controls)
 
     def close(self):
         print("\nShutting down...")

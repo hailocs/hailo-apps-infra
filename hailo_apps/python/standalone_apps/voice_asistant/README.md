@@ -125,6 +125,7 @@ ctl.!default {
    - Press `Space` to start/stop recording
    - Press `Q` to quit the application
    - Press `C` to clear conversation context
+   - Press `X` to abort generation and speech
    - Speak naturally during recording
 
 ## How it works

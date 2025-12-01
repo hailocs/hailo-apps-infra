@@ -153,6 +153,7 @@ def generate_and_stream_response(
     prefix: str = "Assistant: ",
     debug_mode: bool = False,
     token_callback: Optional[Callable[[str], None]] = None,
+    abort_callback: Optional[Callable[[], bool]] = None,
 ) -> str:
     """
     Generate response from LLM and stream it to stdout with filtering.
@@ -169,6 +170,8 @@ def generate_and_stream_response(
         debug_mode (bool): If True, don't filter tokens (show raw output).
         token_callback (Optional[Callable[[str], None]]): Optional callback function
             called with each cleaned token/chunk. Useful for TTS integration.
+        abort_callback (Optional[Callable[[], bool]]): Optional callback function
+            that returns True if generation should be aborted.
 
     Returns:
         str: Raw response string (before filtering, for tool call parsing).
@@ -191,6 +194,11 @@ def generate_and_stream_response(
         max_generated_tokens=max_tokens,
     ) as gen:
         for token in gen:
+            # Check for abort signal
+            if abort_callback and abort_callback():
+                print("\n[Aborted]", end="", flush=True)
+                break
+
             # Filter recovery sequence if present
             if recovery_seq and token == recovery_seq:
                 continue
