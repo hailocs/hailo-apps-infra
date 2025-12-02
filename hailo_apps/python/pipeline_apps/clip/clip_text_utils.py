@@ -7,7 +7,6 @@ Provides tokenizer and pre-computed token embedding LUT (Look-Up Table).
 from pathlib import Path
 from tokenizers import Tokenizer
 import numpy as np
-from hailo_platform import FormatType
 
 # Default paths (in setup subfolder)
 DEFAULT_TOKENIZER_PATH = Path(__file__).parent / "setup" / "clip_tokenizer.json"
@@ -227,7 +226,11 @@ def text_encoding_postprocessing(encoder_output, last_token_positions, text_proj
         # Apply linear projection: (batch, dim) x (dim, out_dim)
         gathered = gathered @ text_projection
 
-    return gathered
+    # L2 normalization (normalize along the embedding dimension)
+    norm = np.linalg.norm(gathered, axis=-1, keepdims=True)
+    normalized = gathered / (norm + 1e-8)  # Add epsilon to avoid division by zero
+
+    return normalized
 
 
 def run_text_encoder_inference(text, hef_path, vdevice, 
@@ -291,9 +294,3 @@ def run_text_encoder_inference(text, hef_path, vdevice,
     )
     
     return normalized_embeddings
-
-
-# Example usage
-if __name__ == "__main__":
-    # This module is intended to be used from the CLIP pipeline app, not run directly.
-    pass
