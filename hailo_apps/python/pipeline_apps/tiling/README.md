@@ -1,4 +1,4 @@
-# Tiling Application
+# Tiling Application (Beta Version)
 
 ![Tiling Example](../../../../local_resources/tiling.gif)
 
@@ -7,7 +7,7 @@
 The tiling pipeline demonstrates splitting each frame into several tiles which are processed independently by the `hailonet` element. This method is especially effective for **detecting small objects in high-resolution frames**.
 
 **To demonstrate tiling capabilities, we've selected a drone/aerial use case as the default:**
-- **Default Model:** `hailo_yolov8n_4_classes_vga` - Hailo trained model, also trained on VisDrone dataset
+- **Default Model:** `hailo_yolov8n_4_classes_vga` - optimized for aerial object detection
 - **Default Video:** `tiling_visdrone_720p.mp4` - aerial footage with small objects
 - **Use Case:** Perfect for demonstrating small object detection in high-resolution frames
 
@@ -31,7 +31,14 @@ To close the application, press `Ctrl+C`.
 
 **With multi-scale for varied object sizes:**
 ```bash
-hailo-tiling --input usb --multi-scale
+hailo-tiling --multi-scale
+```
+- Uses `hailo_yolov8n_4_classes_vga` + multi-scale
+- Optimized for scenes with a mix of small and large objects
+
+**With live camera:**
+```bash
+hailo-tiling --input rpi --multi-scale
 ```
 - Uses `hailo_yolov8n_4_classes_vga` with a live camera feed and multi-scale.
 
@@ -68,7 +75,7 @@ Multi-scale adds these predefined grids:
 - **scale-level 2**: Adds 1×1 + 2×2 = +5 tiles
 - **scale-level 3**: Adds 1×1 + 2×2 + 3×3 = +14 tiles
 
-**Example:** With 4x3 custom grid) and `--multi-scale --scale-levels 2`:
+**Example:** With 4×3 custom grid and `--multi-scale --scale-levels 2`:
 - Custom tiles: 4×3 = 12 tiles
 - Additional: 1×1 + 2×2 = 5 tiles
 - **Total: 17 tiles per frame**
@@ -99,7 +106,7 @@ Use the `--min-overlap` parameter to ensure sufficient overlap for your objects:
 ### How It Works
 
 1. **Auto Mode:** The application calculates the number of tiles needed to ensure at least `min-overlap` between adjacent tiles
-2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tile sizes will be enlarged to meet the minimum overlap requirement, and you'll receive a notification in the configuration printout.
+2. **Manual Mode:** If you specify tile counts that result in less than `min-overlap`, the tiles will be enlarged to meet the minimum overlap. And you'll receive a warning
 
 ### Overlap Recommendations
 
@@ -158,9 +165,10 @@ The application operates in two modes:
 
 **Manual Mode:** Activated when you specify `--tiles-x` or `--tiles-y`
 - You control the tile grid dimensions
-- Tiles sized to model input resolution (or enlarged if needed to meet minimum overlap)
+- Tiles sized to model input resolution (or larger if needed for minimum overlap)
+- Tiles always maintain square aspect ratio (width = height)
 - Overlap automatically calculated to ensure coverage
-- **Note:** If minimum overlap can't be met with model-sized tiles, the application will use larger tiles to satisfy the requirement.
+- **Note:** If minimum overlap can't be met with model input size, tiles will be enlarged while maintaining square aspect ratio
 
 *   `--tiles-x` - Number of tiles horizontally (triggers manual mode)
 *   `--tiles-y` - Number of tiles vertically (triggers manual mode)
@@ -228,6 +236,10 @@ This helps you understand:
 - More tiles = better small object detection
 - More tiles = higher processing time (scales with batch size)
 - Balance based on your hardware and requirements
+
+**Hailo8L Performance:**
+- For Hailo8L with the default `ssd_mobilenet_visdrone` model, the frame rate is automatically set to 19 fps to support Hailo8L's lower performance
+- This adjustment is applied automatically when using the default MobileNetSSD model with batch size 15 on Hailo8L devices
 
 **Experiment:** Try different tile counts and overlap values to find the best balance for your use case. The "auto mode" is a good starting point but probably an overkill for your use case. Note that you might get better results by using less tiles and a stronger model.
 

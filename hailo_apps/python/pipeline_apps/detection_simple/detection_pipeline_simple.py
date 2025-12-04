@@ -1,11 +1,9 @@
 # region imports
 # Standard library imports
-import os
 import setproctitle
 
-from hailo_apps.python.core.common.core import get_default_parser, get_resource_path
+from hailo_apps.python.core.common.core import get_pipeline_parser, get_resource_path
 from hailo_apps.python.core.common.defines import (
-    HAILO_ARCH_KEY,
     RESOURCES_MODELS_DIR_NAME,
     RESOURCES_SO_DIR_NAME,
     RESOURCES_VIDEOS_DIR_NAME,
@@ -18,9 +16,6 @@ from hailo_apps.python.core.common.defines import (
 
 # Logger
 from hailo_apps.python.core.common.hailo_logger import get_logger
-
-# Local application-specific imports
-from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.python.core.gstreamer.gstreamer_app import (
     GStreamerApp,
     app_callback_class,
@@ -46,7 +41,7 @@ hailo_logger = get_logger(__name__)
 class GStreamerDetectionApp(GStreamerApp):
     def __init__(self, app_callback, user_data, parser=None):
         if parser is None:
-            parser = get_default_parser()
+            parser = get_pipeline_parser()
         parser.add_argument(
             "--labels-json",
             default=None,
@@ -57,11 +52,16 @@ class GStreamerDetectionApp(GStreamerApp):
         super().__init__(parser, user_data)
 
         # Additional initialization code can be added here
-        self.video_width = 640
-        self.video_height = 640
+        # Override width/height if not set via parser
+        if self.video_width == 1280:
+            self.video_width = 640
+        if self.video_height == 720:
+            self.video_height = 640
 
         # Set Hailo parameters - these parameters should be set based on the model used
-        self.batch_size = 2
+        # Override batch_size if not set via parser
+        if self.batch_size == 1:
+            self.batch_size = 2
         nms_score_threshold = 0.3
         nms_iou_threshold = 0.45
         if (
@@ -70,28 +70,18 @@ class GStreamerDetectionApp(GStreamerApp):
             self.video_source = get_resource_path(
                 pipeline_name=SIMPLE_DETECTION_PIPELINE,
                 resource_type=RESOURCES_VIDEOS_DIR_NAME,
+                arch=self.arch,
                 model=SIMPLE_DETECTION_VIDEO_NAME,
             )
-        # Determine the architecture if not specified
-        if self.options_menu.arch is None:    
-            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
-            if not arch:
-                hailo_logger.error("Could not detect Hailo architecture.")
-                raise ValueError(
-                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
-                )
-            self.arch = arch
-            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
-        else:
-            self.arch = self.options_menu.arch
-            hailo_logger.debug("Using user-specified arch: %s", self.arch)
+        # Architecture is already handled by GStreamerApp parent class
+        # Use self.arch which is set by parent
 
-        if self.options_menu.hef_path is not None:
-            self.hef_path = self.options_menu.hef_path
-        else:
+        # Set HEF path if not provided via parser
+        if self.hef_path is None:
             self.hef_path = get_resource_path(
                 pipeline_name=SIMPLE_DETECTION_PIPELINE,
                 resource_type=RESOURCES_MODELS_DIR_NAME,
+                arch=self.arch,
             )
 
         hailo_logger.info(f"Using HEF path: {self.hef_path}")
@@ -99,6 +89,7 @@ class GStreamerDetectionApp(GStreamerApp):
         self.post_process_so = get_resource_path(
             pipeline_name=SIMPLE_DETECTION_PIPELINE,
             resource_type=RESOURCES_SO_DIR_NAME,
+            arch=self.arch,
             model=SIMPLE_DETECTION_POSTPROCESS_SO_FILENAME,
         )
         hailo_logger.info(f"Using post-process shared object: {self.post_process_so}")

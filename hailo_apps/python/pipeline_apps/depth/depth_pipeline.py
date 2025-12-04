@@ -1,6 +1,5 @@
 # region imports
 # Standard library imports
-import os
 from pathlib import Path
 
 # Third-party imports
@@ -10,13 +9,12 @@ import setproctitle
 gi.require_version("Gst", "1.0")
 
 # Local application-specific imports
-from hailo_apps.python.core.common.core import get_default_parser, get_resource_path
+from hailo_apps.python.core.common.core import get_pipeline_parser, get_resource_path
 from hailo_apps.python.core.common.defines import (
     DEPTH_APP_TITLE,
     DEPTH_PIPELINE,
     DEPTH_POSTPROCESS_FUNCTION,
     DEPTH_POSTPROCESS_SO_FILENAME,
-    HAILO_ARCH_KEY,
     RESOURCES_MODELS_DIR_NAME,
     RESOURCES_SO_DIR_NAME,
 )
@@ -27,7 +25,6 @@ from hailo_apps.python.core.common.hailo_logger import (
     add_logging_cli_args,
     get_logger,
 )
-from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
 from hailo_apps.python.core.gstreamer.gstreamer_app import (
     GStreamerApp,
     app_callback_class,
@@ -50,7 +47,7 @@ hailo_logger = get_logger(__name__)  # same run_id everywhere
 class GStreamerDepthApp(GStreamerApp):
     def __init__(self, app_callback, user_data, parser=None):
         if parser is None:
-            parser = get_default_parser()
+            parser = get_pipeline_parser()
             add_logging_cli_args(parser)
 
         hailo_logger.info("Initializing GStreamer Depth App...")
@@ -59,34 +56,23 @@ class GStreamerDepthApp(GStreamerApp):
 
         hailo_logger.debug(
             "Parent GStreamerApp initialized, options parsed: arch=%s, input=%s, fps=%s, sync=%s, show_fps=%s",
-            getattr(self.options_menu, "arch", None),
-            getattr(self, "video_source", None),
-            getattr(self, "frame_rate", None),
-            getattr(self, "sync", None),
-            getattr(self, "show_fps", None),
+            self.arch,
+            self.video_source,
+            self.frame_rate,
+            self.sync,
+            self.show_fps,
         )
 
-        # Determine the architecture if not specified
-        if self.options_menu.arch is None:    
-            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
-            if not arch:
-                hailo_logger.error("Could not detect Hailo architecture.")
-                raise ValueError(
-                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
-                )
-            self.arch = arch
-            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
-        else:
-            self.arch = self.options_menu.arch
-            hailo_logger.debug("Using user-specified arch: %s", self.arch)
+        # Architecture is already handled by GStreamerApp parent class
+        # Use self.arch which is set by parent
 
         self.app_callback = app_callback
         setproctitle.setproctitle(DEPTH_APP_TITLE)  # Set the process title
         hailo_logger.debug("Process title set to %s", DEPTH_APP_TITLE)
 
-        self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME)
+        self.hef_path = get_resource_path(DEPTH_PIPELINE, RESOURCES_MODELS_DIR_NAME, self.arch)
         self.post_process_so = get_resource_path(
-            DEPTH_PIPELINE, RESOURCES_SO_DIR_NAME, DEPTH_POSTPROCESS_SO_FILENAME
+            DEPTH_PIPELINE, RESOURCES_SO_DIR_NAME, self.arch, DEPTH_POSTPROCESS_SO_FILENAME
         )
         self.post_function_name = DEPTH_POSTPROCESS_FUNCTION
         hailo_logger.debug(

@@ -19,7 +19,7 @@ from hailo_apps.python.core.common.defines import (
 from hailo_apps.python.core.common.core import get_resource_path
 from hailo_apps.python.core.common.hailo_logger import get_logger
 from hailo_apps.python.core.common.camera_utils import get_usb_video_devices
-from hailo_apps.python.core.common.hef_utils import get_hef_input_size, get_json_config_path_from_hef_name
+from hailo_apps.python.core.common.hef_utils import get_hef_input_size
 from .tile_calculator import calculate_auto_tiles, calculate_manual_tiles_overlap
 
 hailo_logger = get_logger(__name__)
@@ -117,6 +117,7 @@ class TilingConfiguration:
             self.hef_path = get_resource_path(
                 pipeline_name=None,
                 resource_type=RESOURCES_MODELS_DIR_NAME,
+                arch=self.arch,
                 model=TILING_MODEL_NAME
             )
             hailo_logger.info(f"Using default HEF: {self.hef_path}")
@@ -126,9 +127,6 @@ class TilingConfiguration:
             hailo_logger.error(f"HEF path is invalid or missing: {self.hef_path}")
             raise ValueError(f"HEF file not found: {self.hef_path}")
 
-        # Check for specific models and set config_json_path
-        self.config_json_path = get_json_config_path_from_hef_name(self.hef_path)
-
         # Auto-detect model configuration from HEF filename
         self.model_type, self.model_input_width, self.model_input_height, self.post_function = detect_model_config_from_hef(self.hef_path)
         hailo_logger.info(f"Auto-detected: {self.model_type} ({self.model_input_width}x{self.model_input_height}) - {self.post_function}")
@@ -137,6 +135,7 @@ class TilingConfiguration:
         self.post_process_so = get_resource_path(
             pipeline_name=None,
             resource_type=RESOURCES_SO_DIR_NAME,
+            arch=self.arch,
             model=TILING_POSTPROCESS_SO_FILENAME
         )
 

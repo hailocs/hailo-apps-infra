@@ -1,15 +1,9 @@
 """HEF file utilities for extracting model information."""
 
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple
 
 from .hailo_logger import get_logger
-from .core import get_resource_path
-from .defines import (
-    RESOURCES_JSON_DIR_NAME,
-    VISDRONE_CONFIG_JSON_NAME,
-    HAILO_4_CLASSES_CONFIG_JSON_NAME,
-)
 
 hailo_logger = get_logger(__name__)
 
@@ -145,21 +139,4 @@ def get_hef_input_shape(hef_path: str) -> Tuple[int, ...]:
         if isinstance(e, (ValueError, FileNotFoundError, ImportError)):
             raise
         raise ValueError(f"Failed to parse HEF file {hef_path}: {str(e)}") from e
-
-
-def get_json_config_path_from_hef_name(hef_path: str) -> Optional[str]:
-    """Check HEF name for specific models and return the path to the relevant JSON configuration file."""
-    hef_name = Path(hef_path).name.lower()
-    json_path = None
-    if "visdrone" in hef_name:
-        json_path = get_resource_path(pipeline_name=None,
-                                      resource_type=RESOURCES_JSON_DIR_NAME,
-                                      model=VISDRONE_CONFIG_JSON_NAME)
-        hailo_logger.info(f"Detected 'visdrone' in HEF name, using config: {json_path}")
-    elif "4_classes" in hef_name:
-        json_path = get_resource_path(pipeline_name=None,
-                                      resource_type=RESOURCES_JSON_DIR_NAME,
-                                      model=HAILO_4_CLASSES_CONFIG_JSON_NAME)
-        hailo_logger.info(f"Detected '4_classes' in HEF name, using config: {json_path}")
-    return str(json_path) if json_path else None
 

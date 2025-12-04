@@ -47,11 +47,11 @@ from hailo_apps.python.core.common.core import (
 )
 from hailo_apps.python.core.common.installation_utils import detect_hailo_arch
 
-
 # Absolute imports for your common utilities
 from hailo_apps.python.core.common.defines import (
     BASIC_PIPELINES_VIDEO_EXAMPLE_NAME,
     GST_VIDEO_SINK,
+    HAILO_ARCH_KEY,
     HAILO_RGB_VIDEO_FORMAT,
     RESOURCES_ROOT_PATH_DEFAULT,
     RESOURCES_VIDEOS_DIR_NAME,
@@ -72,8 +72,7 @@ hailo_logger = get_logger(__name__)
 try:
     from picamera2 import Picamera2
 except ImportError:
-    hailo_logger.warning("Picamera2 not available; skipping import (likely non-Pi OS).")
-
+    pass
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
@@ -126,23 +125,25 @@ class GStreamerApp:
         self.options_menu = args.parse_args()
         hailo_logger.debug(f"Parsed CLI options: {self.options_menu}")
 
-        # Determine the architecture if not specified
-        if self.options_menu.arch is None:
-            detected_arch = detect_hailo_arch()
-            if detected_arch is None:
-                hailo_logger.error("Could not auto-detect Hailo architecture.")
-                raise ValueError("Could not auto-detect Hailo architecture. Please specify --arch manually.")
-            self.arch = detected_arch
-            hailo_logger.info(f"Auto-detected Hailo architecture: {self.arch}")
-        else:
-            self.arch = self.options_menu.arch
-            hailo_logger.info(f"Using user-specified architecture: {self.arch}")
-
         signal.signal(signal.SIGINT, self.shutdown)
 
         env_file = os.environ.get("HAILO_ENV_FILE")
         hailo_logger.debug(f"Loading environment from {env_file}")
         load_environment(env_file)
+
+        # Determine the architecture if not specified
+        if self.options_menu.arch is None:
+            arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
+            if not arch:
+                hailo_logger.error("Could not detect Hailo architecture.")
+                raise ValueError(
+                    "Could not auto-detect Hailo architecture. Please specify --arch manually."
+                )
+            self.arch = arch
+            hailo_logger.debug(f"Auto-detected Hailo architecture: {self.arch}")
+        else:
+            self.arch = self.options_menu.arch
+            hailo_logger.debug("Using user-specified arch: %s", self.arch)
 
         tappas_post_process_dir = Path(os.environ.get(TAPPAS_POSTPROC_PATH_KEY, ""))
         if tappas_post_process_dir == "":
@@ -189,11 +190,21 @@ class GStreamerApp:
         self.error_occurred = False
         self.pipeline_latency = 300
 
-        self.batch_size = 1
-        self.video_width = 1280
-        self.video_height = 720
+        # Handle batch-size from parser (default: 1)
+        self.batch_size = getattr(self.options_menu, 'batch_size', 1)
+        
+        # Handle width/height from parser (defaults: 1280x720)
+        # Note: parser sets default=None, so we need to check for None explicitly
+        width = getattr(self.options_menu, 'width', None)
+        height = getattr(self.options_menu, 'height', None)
+        self.video_width = width if width is not None else 1280
+        self.video_height = height if height is not None else 720
+        
         self.video_format = HAILO_RGB_VIDEO_FORMAT
-        self.hef_path = None
+        
+        # Handle hef-path from parser (default: None, apps can override)
+        self.hef_path = getattr(self.options_menu, 'hef_path', None)
+        
         self.app_callback = None
 
         user_data.use_frame = self.options_menu.use_frame
@@ -377,7 +388,7 @@ class GStreamerApp:
 
     def update_fps_caps(self, new_fps=30, source_name="source"):
         hailo_logger.debug(
-            "update_fps_caps() called with new_fps=%s, source_name=%s", new_fps, source_name
+            f"update_fps_caps() called with new_fps={new_fps}, source_name={source_name}"
         )
         videorate_name = f"{source_name}_videorate"
         capsfilter_name = f"{source_name}_fps_caps"

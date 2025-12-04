@@ -18,7 +18,7 @@ except ImportError:
     exit(1)
 
 # Local application/library imports
-from db_handler import DatabaseHandler, Record
+from hailo_apps.python.core.common.db_handler import DatabaseHandler, Record
 
 from hailo_apps.python.core.common.defines import (
     FACE_RECON_DATABASE_DIR_NAME,
