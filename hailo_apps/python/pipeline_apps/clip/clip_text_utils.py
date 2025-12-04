@@ -7,6 +7,7 @@ Provides tokenizer and pre-computed token embedding LUT (Look-Up Table).
 from pathlib import Path
 from tokenizers import Tokenizer
 import numpy as np
+from hailo_platform import VDevice, FormatType
 
 # Default paths (in setup subfolder)
 DEFAULT_TOKENIZER_PATH = Path(__file__).parent / "setup" / "clip_tokenizer.json"
@@ -233,7 +234,7 @@ def text_encoding_postprocessing(encoder_output, last_token_positions, text_proj
     return normalized
 
 
-def run_text_encoder_inference(text, hef_path, vdevice, 
+def run_text_encoder_inference(text, hef_path, 
                                tokenizer=None, token_embeddings=None,
                                text_projection=None, tokenizer_path=None,
                                embeddings_path=None, text_projection_path=None,
@@ -249,7 +250,6 @@ def run_text_encoder_inference(text, hef_path, vdevice,
     Args:
         text: String or list of strings to encode
         hef_path: Path to CLIP text encoder HEF file
-        vdevice: VDevice instance (required)
         tokenizer: Tokenizer instance. If None, loads from tokenizer_path or default.
         token_embeddings: Token embedding matrix. If None, loads from embeddings_path or default.
         text_projection: Text projection matrix. If None, loads from file.
@@ -273,18 +273,23 @@ def run_text_encoder_inference(text, hef_path, vdevice,
     last_token_positions = prepared['last_token_positions']  # Shape: (batch,)
     
     # Step 2: Run Hailo inference
-    infer_model = vdevice.create_infer_model(str(hef_path))
-    with infer_model.configure() as configured_infer_model:
-        configured_infer_model.activate()
-        bindings = configured_infer_model.create_bindings()
-        input_buffer = np.ascontiguousarray(input_embeddings, dtype=np.uint16)
-        bindings.input().set_buffer(input_buffer)
-        output_buffer = np.empty(infer_model.output().shape).astype(np.uint8)
-        bindings.output().set_buffer(output_buffer)
-        configured_infer_model.run([bindings], timeout_ms)
+    with VDevice() as vdevice:  # vdevice context must be closed before the one Gstream pipeline is starting
+        infer_model = vdevice.create_infer_model(str(hef_path))
+        # below must be set before configuring the infer model
+        input_layer_name = 'clip_vit_b_32_text_encoder/input_layer1'  # Bash: `hailortcli parse-hef <hef_path>`: UINT16, NHWC(1x77x512)
+        output_layer_name = 'clip_vit_b_32_text_encoder/normalization25'  # UINT8, NHWC(1x77x512)
+        infer_model.input(input_layer_name).set_format_type(FormatType.FLOAT32)  # the provided input will be Float - HRT will quantize to required type by the input layer (UINT8)
+        infer_model.output(output_layer_name).set_format_type(FormatType.FLOAT32)  # we need the output to be dequantized - HRT will dequantize
+        with infer_model.configure() as configured_infer_model:
+            bindings = configured_infer_model.create_bindings()
+            input_buffer = np.empty(infer_model.input().shape, dtype=np.float32)  # as we defined above - the input will be Float
+            input_buffer[:] = input_embeddings
+            bindings.input().set_buffer(input_buffer)
+            output_buffer = np.empty(infer_model.output().shape, dtype=np.float32)  # as we defined above - the output will be Float
+            bindings.output().set_buffer(output_buffer)
+            configured_infer_model.run([bindings], timeout_ms)
         output_buffer = bindings.output().get_buffer()
-        configured_infer_model.deactivate()
-            
+
     # Step 3: Post-process the encoder output
     normalized_embeddings = text_encoding_postprocessing(
         encoder_output=output_buffer,

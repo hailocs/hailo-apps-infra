@@ -12,7 +12,6 @@ from gi.repository import Gst
 
 # Local application-specific imports
 import hailo
-from hailo_platform import VDevice
 from hailo_apps.python.core.common.defines import (
     CLIP_TEXT_ENCODER_PIPELINE,
     RESOURCES_SO_DIR_NAME, 
@@ -106,15 +105,13 @@ class GStreamerClipApp(GStreamerApp):
 
         self.matching_callback_name = 'matching_identity_callback'
         
-        # Initialize VDevice for text encoder inference
-        self.vdevice = VDevice()
-        self.example_prompt_text = 'Person'
-        self.hailo_text_embedding = run_text_encoder_inference(text=self.example_prompt_text, hef_path=self.hef_path_text_clip, vdevice=self.vdevice)
-        if self.text_embedding is not None:
-            self.text_image_matcher.add_text_hailo(self.example_prompt_text, self.text_embedding[0], negative=False)
-            print('Done add_text_hailo')
-        else:
-            print('Warning: Failed to compute text embedding during initialization')
+        # self.example_prompt_text = 'Person'
+        # self.hailo_text_embedding = run_text_encoder_inference(text=self.example_prompt_text, hef_path=self.hef_path_text_clip)
+        # if self.hailo_text_embedding is not None:
+        #     self.text_image_matcher.add_text_hailo(self.example_prompt_text, self.hailo_text_embedding[0], negative=False)
+        #     print('Done add_text_hailo')
+        # else:
+        #     print('Warning: Failed to compute text embedding during initialization')
         self.create_pipeline()
 
         identity = self.pipeline.get_by_name(self.matching_callback_name)
@@ -177,8 +174,6 @@ class GStreamerClipApp(GStreamerApp):
             clip_hmux. ! {QUEUE(name="clip_hmux_queue")} '
 
         display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps='True')
-        
-        overlay_pipeline = OVERLAY_PIPELINE()
 
         matching_callback_pipeline = USER_CALLBACK_PIPELINE(name=self.matching_callback_name)
         
@@ -187,10 +182,9 @@ class GStreamerClipApp(GStreamerApp):
         if self.detector == 'none':
             return (
                 f'{source_pipeline} ! '
-                f'{detection_pipeline_wrapper} ! '
+                f'{clip_pipeline_wrapper} ! '
                 f'{matching_callback_pipeline} ! '
                 f'{user_callback_pipeline} ! '
-                f'{overlay_pipeline} ! '
                 f'{display_pipeline}'
             )
         else:
@@ -243,9 +237,9 @@ class GStreamerClipApp(GStreamerApp):
             
             # Direct matching: text embeddings vs image embeddings (without storing in database)
             # This returns which image best matches each text embedding
-            print('start')
-            hailo_matches = self.text_image_matcher.hailo_match(self.text_embedding, embeddings_np, report_all=True)
-            print(hailo_matches)
+            # print('start')
+            # hailo_matches = self.text_image_matcher.hailo_match(self.hailo_text_embedding, embeddings_np, report_all=True)
+            # print(hailo_matches)
             # hailo_matches: List[Match] where each Match contains:
             #   - row_idx: index of best matching image in embeddings_np
             #   - similarity: cosine similarity score

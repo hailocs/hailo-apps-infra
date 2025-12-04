@@ -28,7 +28,30 @@ pip install tokenizers transformers torch
 
 **Note:** The generated files will be created in the `setup/` folder and automatically used by `clip_text_utils.py`.
 
-### 2. Use the Text Encoder
+### 2. Generate Sample Embeddings JSON (Optional)
+
+After generating the required files above, you can create a sample embeddings JSON file with pre-computed text embeddings:
+
+```bash
+cd setup
+
+# Generate embeddings.json with sample text entries
+python3 build_sample_embeddings_json.py
+```
+
+This will:
+- Use the Hailo text encoder to generate embeddings for sample texts
+- Create an `embeddings.json` file in the parent directory
+- Include entries for: person, sea, dog, cat, snake, and empty strings
+
+**Note:** This step requires:
+- All three files from Step 1 must be generated first
+- A valid Hailo text encoder HEF file
+- The `hailo_platform` package installed
+
+The generated `embeddings.json` can be used as a starting point for your own custom embeddings.
+
+### 3. Use the Text Encoder
 
 Once the files are generated, you can use them:
 
@@ -65,6 +88,14 @@ text_features = run_text_encoder_inference(
 | `setup/token_embedding_lut.npy` | ~97 MB | Converts token IDs → embeddings | `setup/generate_token_embedding_lut.py` |
 | `setup/text_projection.npy` | ~1 MB | Projects encoder output to final embeddings | `setup/generate_text_projection.py` |
 
+### Generated Configuration Files (in main folder)
+
+| File | Size | Purpose | Generator Script |
+|------|------|---------|------------------|
+| `embeddings.json` | ~200 KB | Pre-computed text embeddings for runtime use | `setup/build_sample_embeddings_json.py` |
+
+**Note:** The `embeddings.json` file will be **overwritten** if you run `build_sample_embeddings_json.py` again. Back up your custom embeddings before regenerating.
+
 ### Source Files
 
 | File | Location | Purpose |
@@ -74,6 +105,7 @@ text_features = run_text_encoder_inference(
 | `generate_tokenizer.py` | `setup/` | One-time script to generate tokenizer |
 | `generate_token_embedding_lut.py` | `setup/` | One-time script to generate embedding LUT |
 | `generate_text_projection.py` | `setup/` | One-time script to generate text projection matrix |
+| `build_sample_embeddings_json.py` | `setup/` | Script to generate sample embeddings JSON |
 
 ## Architecture
 
@@ -90,6 +122,8 @@ Text Input
     ↓ Projected embeddings
 [L2 Normalization]
     ↓ Text Features (normalized embeddings)
+    ↓
+[Save to embeddings.json] (Optional, for runtime use)
 ```
 
 ## Model Information
@@ -108,6 +142,7 @@ Text Input
 - After generation, you can uninstall `transformers` and `torch` if desired
 - The `tokenizers` package must remain installed for runtime use
 - `clip_text_utils.py` automatically looks for files in the `setup/` folder
+- **Running `build_sample_embeddings_json.py` will overwrite existing `embeddings.json`** - back up custom embeddings first
 
 ## Testing
 
@@ -142,6 +177,11 @@ python3 generate_token_embedding_lut.py
 cd setup
 python3 generate_text_projection.py
 ```
+
+### "embeddings.json was overwritten"
+- **Solution**: The `build_sample_embeddings_json.py` script always overwrites the output file
+- **Prevention**: Back up your custom `embeddings.json` before running the script
+- **Alternative**: Modify the `json_output_path` variable in the script to save to a different filename
 
 ### Missing dependencies
 ```bash
