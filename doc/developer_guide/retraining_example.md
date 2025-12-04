@@ -2,9 +2,6 @@
 
 In this example, we're going to retrain the model to detect barcodes using the barcode-detector dataset from Kaggle. After the retraining process, we're going to convert the model to HEF and test it on the Raspberry Pi 5 AI Kit (or any X86 platform with a Hailo accelerator).
 
-### NEW:
-There is an alternative way to retrain and compile via Google Collab - Please refer to [yolov8s_hailo_retraining.ipynb](./yolov8s_hailo_retraining.ipynb)
-
 #### This tutorial (training the model & compiling the result into HEF) was created on a development machine with the following specifications:
 
 - CPU: Intel Xeon w7-3455
